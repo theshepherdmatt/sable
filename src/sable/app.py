@@ -53,6 +53,27 @@ def status_event(old, new):
     return None
 
 
+# Sources whose audio does NOT pass through MPD's PCM fifo, so CAVA sees nothing
+# and a spectrum/meter screen would be blank (rp2/streaming via mpv, web radio,
+# AirPlay via shairport). MPD / local-library DOES feed CAVA. Identified by the
+# Volumio `service` value. ONE gate -- keep the set here, not scattered as
+# service== checks across the resolution paths.
+_NON_CAVA_SERVICES = frozenset({
+    "rp2", "radioparadise", "radio_paradise", "motherearthradio",
+    "webradio", "airplay", "airplay_emulation", "spop", "spotify",
+})
+
+
+def source_feeds_cava(state):
+    """True only when the current audio is MPD-routed (so it reaches the CAVA
+    fifo). Non-MPD sources bypass it -> the spectrum would be blank, so callers
+    fall back to the modern screen. Unknown/empty service -> assume MPD-routed
+    (don't suppress a source we don't recognise)."""
+    if state is None:
+        return True
+    return (state.service or "").strip().lower() not in _NON_CAVA_SERVICES
+
+
 class App:
     def __init__(self, display, settings, dry_run=True, log=print):
         self.display = display
@@ -73,9 +94,14 @@ class App:
         self.asleep = False
 
     def nowplaying_screen(self):
-        """Resolve the configured now-playing screen for the FSM @nowplaying token."""
+        """Resolve the now-playing screen for the FSM @nowplaying token. A spectrum
+        style only resolves to the meter when the current source actually feeds CAVA
+        (source_feeds_cava) -- otherwise the fifo is empty and the meter would be
+        blank, so fall back to the modern screen. This is the ONE place the gate is
+        applied; base_screen() and reconcile_screen() both delegate here."""
         s = self.settings.get("display", "screen", default="modern")
-        if s in ("spectrum", "vu", "digitalvu", "bars", "dots"):
+        if (s in ("spectrum", "vu", "digitalvu", "bars", "dots")
+                and source_feeds_cava(self.store.get())):
             return "spectrum"
         return "modern"
 
@@ -85,15 +111,20 @@ class App:
         return self.nowplaying_screen() if self.store.get().status in ("play", "pause") else "clock"
 
     def reconcile_screen(self):
-        """Backstop for missed FSM edges: the screen switch is edge-triggered, so a
-        'play' event that fires while we're in a menu/browse/splash is dropped and
-        we can end up parked on the clock with audio playing. Run every render tick;
-        only ever corrects clock-while-playing -> now-playing, so it never fights
-        menu/browse navigation or the now-playing<->clock edges."""
+        """Backstop for the edge-triggered screen switch. Run every render tick while
+        playing; corrects two things and never touches menu/browse:
+          (a) parked on the clock while audio plays (a 'play' edge dropped because we
+              were in a menu/browse/splash) -> go to now-playing; and
+          (b) the resolved now-playing screen changed while still playing -- e.g. the
+              source switched MPD<->rp2, so spectrum<->modern -- with no clock flash."""
         if self.asleep or self.fsm.current is None:
             return
-        if self.fsm.current.name == "clock" and self.store.get().status in ("play", "pause"):
-            self.go(self.nowplaying_screen())
+        if self.store.get().status not in ("play", "pause"):
+            return
+        cur = self.fsm.current.name
+        want = self.nowplaying_screen()
+        if cur == "clock" or (cur in ("modern", "spectrum") and cur != want):
+            self.go(want)
 
     # --- state -> FSM + redraw ---
     def _on_state(self, old, new):
