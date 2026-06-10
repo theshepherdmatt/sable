@@ -94,6 +94,8 @@ class App:
         self.asleep = False
         self._stop_timer = None        # deferred stop->clock fall-back (Fix 2)
         self._stop_grace_s = 1.5
+        self._last_switch_t = 0.0      # auto-transition cooldown (Fix 3)
+        self._switch_cooldown_s = 0.5
 
     def nowplaying_screen(self):
         """Resolve the now-playing screen for the FSM @nowplaying token. A spectrum
@@ -126,14 +128,18 @@ class App:
         cur = self.fsm.current.name
         want = self.nowplaying_screen()
         if cur == "clock" or (cur in ("modern", "spectrum") and cur != want):
-            self.go(want)
+            if self._switch_due():
+                self._stamp_switch()
+                self.go(want)
 
     # --- state -> FSM + redraw ---
     def _on_state(self, old, new):
         ev = status_event(old, new)
         if ev == "play":
             self._cancel_stop_timer()
-            self.fsm.dispatch("play")
+            if self._switch_due():
+                self._stamp_switch()
+                self.fsm.dispatch("play")
         elif ev == "stop":
             # Defer the clock fall-back: a transient stop between tracks/sources
             # must not flash the clock (Fix 2).
@@ -158,7 +164,19 @@ class App:
         # so a stop that resolves back to play between tracks never reaches clock.
         self._stop_timer = None
         if self.store.get().status not in ("play", "pause"):
+            self._stamp_switch()
             self.fsm.dispatch("stop")
+
+    # --- auto-transition cooldown (Fix 3) ---
+    def _switch_due(self):
+        """True if enough time has passed since the last AUTOMATIC screen switch.
+        Throttles playback/source-driven switches (play edge, reconcile, stop) so a
+        pushState burst can't flicker; user navigation (menu/back/select via go) is
+        never gated. reconcile retries each tick, so it still converges after a burst."""
+        return (time.monotonic() - self._last_switch_t) >= self._switch_cooldown_s
+
+    def _stamp_switch(self):
+        self._last_switch_t = time.monotonic()
 
     # --- idle / OLED sleep (burn-in protection) ---
     def note_activity(self):
