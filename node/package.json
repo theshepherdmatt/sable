@@ -1,0 +1,22 @@
+{
+  "name": "sable",
+  "version": "0.0.1",
+  "description": "Sable front-panel controller for the Audiophonics EVO Sabre",
+  "main": "index.js",
+  "engines": {
+    "node": ">=20",
+    "volumio": ">=4"
+  },
+  "volumio_info": {
+    "prettyName": "Sable",
+    "plugin_type": "system_hardware",
+    "icon": "fa-sliders",
+    "architectures": ["armhf"],
+    "os": ["bookworm"]
+  },
+  "license": "MIT",
+  "dependencies": {
+    "kew": "^0.7.0",
+    "js-yaml": "^4.1.0"
+  }
+}

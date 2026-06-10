@@ -1,0 +1,16 @@
+{
+  "status": "pause",
+  "title": "はじまりの海",
+  "artist": "Maaya Sakamoto, Cornelius",
+  "album": "シングルコレクション + アチコチ",
+  "service": "rp2",
+  "uri": "rp2/channel@id=3",
+  "albumart": "https://img.radioparadise.com/covers/l/26784.jpg",
+  "volume": 100,
+  "mute": false,
+  "samplerate": "44.1 kHz",
+  "bitdepth": "16-bit",
+  "seek": 70013,
+  "duration": 233,
+  "stream": "False"
+}

@@ -1,0 +1,32 @@
+{
+  "_meta": {
+    "rev": 1
+  },
+  "clock": {
+    "font": "sans",
+    "show_date": false,
+    "show_seconds": false
+  },
+  "controls": {
+    "leds_enabled": true
+  },
+  "dac": {
+    "input_index": 0
+  },
+  "display": {
+    "brightness": "high",
+    "rotate": 0,
+    "screen": "modern",
+    "spectrum": true,
+    "spectrum_style": "bars"
+  },
+  "ir": {
+    "enabled": true,
+    "profile": "ApEvo"
+  },
+  "screensaver": {
+    "idle_s": 3600,
+    "sleep_s": 600,
+    "type": "geo"
+  }
+}

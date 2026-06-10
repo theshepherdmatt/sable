@@ -1,0 +1,31 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+
+# Virtualenvs
+.venv/
+venv/
+env/
+
+# Node (the Volumio plugin scaffold commits index.js + package.json only)
+node_modules/
+
+# Logs, backups, editor/OS cruft
+*.log
+*.bak
+*.bak2
+*~
+.DS_Store
+
+# SimDisplay frame output
+var/
+
+# Live, machine-specific runtime config -- NOT committed.
+# Sane defaults live in config/settings.default.json; the app falls back to
+# its in-code DEFAULTS (which that file mirrors) when this is absent.
+config/settings.json
+
+# Backups of the retired quadify unit files -- not Sable's own code
+disabled-units/

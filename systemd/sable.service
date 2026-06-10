@@ -1,0 +1,27 @@
+[Unit]
+Description=Sable Display (Quadify successor) - OLED + rotary + spectrum
+# Sable's display app owns SPI (SSD1322) and the rotary GPIO. It must NOT run
+# alongside quadify.service (which owns the same SPI/GPIO) -- the installer
+# disables quadify.service + cava.service. Buttons/LEDs (quadify-buttonsleds)
+# and IR (ir_listener) are independent services and keep running.
+After=network.target volumio.service
+Wants=volumio.service
+Conflicts=quadify.service
+
+[Service]
+Type=simple
+User=volumio
+Group=volumio
+WorkingDirectory=/home/volumio/sable
+Environment=PYTHONPATH=/home/volumio/sable/src
+# --stage full = clock + live Volumio listener + rotary + live CAVA spectrum
+# (Sable's own cava on MPD's /tmp/cava.fifo). run_hardware handles SIGTERM and
+# releases SPI/GPIO cleanly in its finally block.
+ExecStart=/usr/bin/python3 -u -m sable.app --hardware --stage full
+Restart=always
+RestartSec=3
+KillSignal=SIGTERM
+TimeoutStopSec=8
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,17 @@
+[Unit]
+Description=Sable Buttons and LEDs (MCP23017)
+After=local-fs.target
+
+[Service]
+Type=simple
+User=volumio
+WorkingDirectory=@ROOT@
+Environment=PYTHONUNBUFFERED=1
+Environment=PYTHONPATH=@ROOT@/src
+ExecStart=@PYTHON@ -m sable.controls
+# Carry-forward #4: an early-boot write to 0x20 can EIO; let systemd retry hard.
+Restart=always
+RestartSec=1
+
+[Install]
+WantedBy=multi-user.target

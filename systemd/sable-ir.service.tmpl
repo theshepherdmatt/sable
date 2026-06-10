@@ -1,0 +1,17 @@
+[Unit]
+Description=Sable IR Listener (LIRC)
+After=lircd.service
+Wants=lircd.service
+
+[Service]
+Type=simple
+User=volumio
+WorkingDirectory=@ROOT@
+Environment=PYTHONUNBUFFERED=1
+Environment=PYTHONPATH=@ROOT@/src
+ExecStart=@PYTHON@ -m sable.ir
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target

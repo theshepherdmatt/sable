@@ -1,0 +1,19 @@
+[Unit]
+Description=Sable Display (OLED UI)
+After=network.target volumio.service
+Wants=volumio.service
+
+[Service]
+Type=simple
+User=volumio
+WorkingDirectory=@ROOT@
+Environment=PYTHONUNBUFFERED=1
+Environment=PYTHONPATH=@ROOT@/src
+ExecStart=@PYTHON@ -m sable.app --hardware
+ExecStop=@PYTHON@ -m sable.app --blank-panel
+Restart=on-failure
+TimeoutStopSec=10
+KillSignal=SIGTERM
+
+[Install]
+WantedBy=multi-user.target
