@@ -96,6 +96,7 @@ class App:
         self._stop_grace_s = 1.5
         self._last_switch_t = 0.0      # auto-transition cooldown (Fix 3)
         self._switch_cooldown_s = 0.5
+        self._first_state = True       # suppress stale-stop bounce on boot (Fix 4)
 
     def nowplaying_screen(self):
         """Resolve the now-playing screen for the FSM @nowplaying token. A spectrum
@@ -135,15 +136,21 @@ class App:
     # --- state -> FSM + redraw ---
     def _on_state(self, old, new):
         ev = status_event(old, new)
+        first, self._first_state = self._first_state, False
         if ev == "play":
             self._cancel_stop_timer()
             if self._switch_due():
                 self._stamp_switch()
                 self.fsm.dispatch("play")
         elif ev == "stop":
-            # Defer the clock fall-back: a transient stop between tracks/sources
-            # must not flash the clock (Fix 2).
-            self._arm_stop_timer()
+            if first:
+                # First pushState after boot/handoff is often a stale stop from the
+                # previous session -- don't fall to the clock on it (Fix 4).
+                self.render()
+            else:
+                # Defer the clock fall-back: a transient stop between tracks/sources
+                # must not flash the clock (Fix 2).
+                self._arm_stop_timer()
         else:
             self.render()
 
