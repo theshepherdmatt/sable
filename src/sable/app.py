@@ -92,6 +92,8 @@ class App:
         self.store.subscribe(self._on_state)
         self.last_input = time.monotonic()
         self.asleep = False
+        self._stop_timer = None        # deferred stop->clock fall-back (Fix 2)
+        self._stop_grace_s = 1.5
 
     def nowplaying_screen(self):
         """Resolve the now-playing screen for the FSM @nowplaying token. A spectrum
@@ -129,10 +131,34 @@ class App:
     # --- state -> FSM + redraw ---
     def _on_state(self, old, new):
         ev = status_event(old, new)
-        if ev:
-            self.fsm.dispatch(ev)
+        if ev == "play":
+            self._cancel_stop_timer()
+            self.fsm.dispatch("play")
+        elif ev == "stop":
+            # Defer the clock fall-back: a transient stop between tracks/sources
+            # must not flash the clock (Fix 2).
+            self._arm_stop_timer()
         else:
             self.render()
+
+    # --- deferred stop -> clock (Fix 2: 1.5s grace, non-stacking) ---
+    def _arm_stop_timer(self):
+        self._cancel_stop_timer()
+        self._stop_timer = threading.Timer(self._stop_grace_s, self._stop_timer_fire)
+        self._stop_timer.daemon = True
+        self._stop_timer.start()
+
+    def _cancel_stop_timer(self):
+        if self._stop_timer is not None:
+            self._stop_timer.cancel()
+            self._stop_timer = None
+
+    def _stop_timer_fire(self):
+        # Re-read status at fire time: only fall to clock if STILL stopped/paused,
+        # so a stop that resolves back to play between tracks never reaches clock.
+        self._stop_timer = None
+        if self.store.get().status not in ("play", "pause"):
+            self.fsm.dispatch("stop")
 
     # --- idle / OLED sleep (burn-in protection) ---
     def note_activity(self):
