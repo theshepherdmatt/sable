@@ -5,8 +5,10 @@ fires that is not listed here, and every target is a registered screen. The toke
 "@nowplaying" resolves (via the app) to the configured now-playing screen
 (modern, spectrum, ...), so adding a now-playing variant needs no new transitions.
 
-Carry-forward #8: locks are released BEFORE on_exit/on_enter fire, because a
-screen's enter can itself request a transition.
+Transitions are serialized under self._lock (an RLock, so a screen's on_enter may
+still request a re-entrant transition). on_enter is wrapped: if it raises, the FSM
+rolls back to the previous screen rather than stranding itself on a half-
+initialised one. self.current is committed only AFTER on_enter succeeds.
 """
 import threading
 
@@ -40,12 +42,29 @@ class FSM:
             prev = self.current
             if prev is target:
                 return
-        if prev is not None:
-            prev.on_exit()
-        with self._lock:
-            self.current = target
-        self._cancel_menu_timer()
-        target.on_enter(**kwargs)
+            if prev is not None:
+                try:
+                    prev.on_exit()
+                except Exception as exc:
+                    self.log("fsm: on_exit error (%s): %s" % (prev.name, exc))
+            try:
+                target.on_enter(**kwargs)
+            except Exception as exc:
+                # Never strand the FSM on a screen that failed to initialise: roll
+                # back to prev (best-effort re-enter) and keep it as current.
+                self.log("fsm: on_enter failed (%s) -- staying on %s: %s"
+                         % (target.name, prev.name if prev else None, exc))
+                if prev is not None:
+                    try:
+                        prev.on_enter()
+                    except Exception:
+                        pass
+                self.current = prev
+            else:
+                # Commit target -- unless on_enter itself transitioned elsewhere.
+                if self.current is prev:
+                    self.current = target
+            self._cancel_menu_timer()
         self.app.render()
 
     def dispatch(self, event):
