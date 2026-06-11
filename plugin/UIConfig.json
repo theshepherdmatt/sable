@@ -1,0 +1,119 @@
+{
+  "page": { "label": "Sable", "icon": "fa-sliders" },
+  "sections": [
+    {
+      "id": "display",
+      "label": "Display",
+      "element": "section",
+      "icon": "fa-television",
+      "onSave": { "type": "controller", "endpoint": "system_hardware/sable", "method": "saveDisplay" },
+      "content": [
+        {
+          "id": "display_screen",
+          "element": "select",
+          "label": "Now-playing screen",
+          "value": { "value": "modern", "label": "Modern (album art)" },
+          "options": [
+            { "value": "modern", "label": "Modern (album art)" },
+            { "value": "spectrum", "label": "Spectrum visualiser" }
+          ]
+        },
+        {
+          "id": "spectrum_style",
+          "element": "select",
+          "label": "Spectrum style",
+          "description": "Used when the now-playing screen is set to Spectrum.",
+          "value": { "value": "bars", "label": "Bars" },
+          "options": [
+            { "value": "bars", "label": "Bars" },
+            { "value": "dots", "label": "Dots" },
+            { "value": "mirror", "label": "Mirror" },
+            { "value": "ribbon", "label": "Ribbon" }
+          ]
+        },
+        {
+          "id": "brightness",
+          "element": "select",
+          "label": "Brightness",
+          "value": { "value": "high", "label": "High" },
+          "options": [
+            { "value": "low", "label": "Low" },
+            { "value": "medium", "label": "Medium" },
+            { "value": "high", "label": "High" }
+          ]
+        },
+        { "id": "transitions", "element": "switch", "label": "Crossfade between screens", "value": true }
+      ],
+      "saveButton": {
+        "label": "Save",
+        "data": ["display_screen", "spectrum_style", "brightness", "transitions"]
+      }
+    },
+    {
+      "id": "clock",
+      "label": "Clock",
+      "element": "section",
+      "icon": "fa-clock-o",
+      "onSave": { "type": "controller", "endpoint": "system_hardware/sable", "method": "saveClock" },
+      "content": [
+        { "id": "show_seconds", "element": "switch", "label": "Show seconds", "value": false },
+        { "id": "show_date", "element": "switch", "label": "Show date", "value": false }
+      ],
+      "saveButton": { "label": "Save", "data": ["show_seconds", "show_date"] }
+    },
+    {
+      "id": "screensaver",
+      "label": "Screensaver",
+      "element": "section",
+      "icon": "fa-moon-o",
+      "onSave": { "type": "controller", "endpoint": "system_hardware/sable", "method": "saveScreensaver" },
+      "content": [
+        { "id": "dim_s", "element": "input", "type": "number", "label": "Dim after (seconds)", "value": 120,
+          "attributes": [{ "property": "min", "value": 0 }],
+          "description": "Idle time before the panel dims and starts shifting (burn-in protection). 0 disables." },
+        { "id": "idle_s", "element": "input", "type": "number", "label": "Switch off after (seconds)", "value": 3600,
+          "attributes": [{ "property": "min", "value": 0 }],
+          "description": "Idle time before the panel fades to black. 0 = never." }
+      ],
+      "saveButton": { "label": "Save", "data": ["dim_s", "idle_s"] }
+    },
+    {
+      "id": "controls",
+      "label": "Controls",
+      "element": "section",
+      "icon": "fa-gamepad",
+      "onSave": { "type": "controller", "endpoint": "system_hardware/sable", "method": "saveControls" },
+      "content": [
+        { "id": "leds_enabled", "element": "switch", "label": "Buttons and LEDs", "value": true },
+        { "id": "ir_enabled", "element": "switch", "label": "IR remote", "value": true }
+      ],
+      "saveButton": { "label": "Save", "data": ["leds_enabled", "ir_enabled"] }
+    },
+    {
+      "id": "actions",
+      "label": "Actions",
+      "element": "section",
+      "icon": "fa-cogs",
+      "content": [
+        {
+          "element": "button",
+          "label": "Reload settings on the panel now",
+          "onClick": {
+            "type": "emit",
+            "message": "callMethod",
+            "data": { "endpoint": "system_hardware/sable", "method": "reloadSable", "data": "" }
+          }
+        },
+        {
+          "element": "button",
+          "label": "Restart Sable",
+          "onClick": {
+            "type": "emit",
+            "message": "callMethod",
+            "data": { "endpoint": "system_hardware/sable", "method": "restartSable", "data": "" }
+          }
+        }
+      ]
+    }
+  ]
+}

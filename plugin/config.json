@@ -1,0 +1,6 @@
+{
+  "note": {
+    "type": "string",
+    "value": "Sable's real settings live in /home/volumio/sable/config/settings.json. This plugin reads and writes that file directly; this config.json only satisfies Volumio's plugin contract."
+  }
+}

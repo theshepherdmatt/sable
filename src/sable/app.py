@@ -380,6 +380,10 @@ class App:
             self._dac_input()
         elif cmd == "reload_config":
             self.settings.load()
+            # Re-apply settings that are set imperatively (not read each frame):
+            # brightness -> contrast. screen/style/transitions/clock/screensaver
+            # are read live in render()/tick, so they apply on the next frame.
+            self.set_brightness_from_settings()
             self.log("config reloaded")
             self.render()
         elif cmd == "shutdown":

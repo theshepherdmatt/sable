@@ -1,0 +1,36 @@
+{
+  "name": "sable",
+  "version": "1.0.0",
+  "description": "Settings bridge for the Sable OLED front-panel",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"No test specified\" && exit 0"
+  },
+  "author": "Matt Shepherd",
+  "license": "MIT",
+  "repository": "https://github.com/theshepherdmatt/sable",
+  "volumio_info": {
+    "prettyName": "Sable",
+    "icon": "fa-sliders",
+    "plugin_type": "system_hardware",
+    "architectures": [
+      "armhf",
+      "amd64"
+    ],
+    "os": [
+      "bookworm"
+    ],
+    "details": "Edit the Sable front-panel settings from the Volumio web UI.",
+    "changelog": "Initial settings bridge.",
+    "manually_installed": true
+  },
+  "engines": {
+    "node": ">=16",
+    "volumio": ">=3"
+  },
+  "dependencies": {
+    "fs-extra": "^11.2.0",
+    "kew": "^0.7.0",
+    "v-conf": "^1.4.0"
+  }
+}
