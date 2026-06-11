@@ -1,17 +1,14 @@
-# Sable runtime deps -- curated, only what is actually imported, and PINNED to the
-# versions verified running on Volumio 4 / Bookworm / Python 3.11 (a Pi 4 + EVO
-# Sabre). This is the tested combination; bump deliberately, not casually.
-
-# OLED (SSD1322 over SPI)
+# Sable's PURE-PYTHON deps -- installed by pip (see install.sh).
+#
+# The compiled/C-extension deps are NOT here: install.sh apt-installs them as
+# prebuilt Debian packages (python3-pil = Pillow, python3-cbor2, python3-spidev,
+# python3-rpi.gpio, python3-smbus) so NOTHING needs a compiler/Rust on 32-bit ARM.
+# luma.core pulls those, but they are already satisfied by apt, so pip just adds
+# the pure-Python wheels below.
+#
+# EIO3 LOAD-BEARING PAIR (Volumio's Socket.IO) -- do not bump (see DESIGN.md).
 luma.oled==3.8.0
 luma.core==2.3.1
-Pillow==9.5.0
-
-# Volumio Socket.IO -- EIO3 LOAD-BEARING PAIR, do not bump (see DESIGN.md).
 python-socketio==4.6.1
 python-engineio==3.14.2
-
-# Hardware I/O
-smbus2==0.5.0          # MCP23017 (i2c-1)
-# RPi.GPIO is installed via apt (python3-rpi.gpio 0.7.1), not pip.
-# cava (spectrum/VU) is installed via apt (`apt install cava`), not pip.
+smbus2==0.5.0

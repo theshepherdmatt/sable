@@ -17,11 +17,7 @@ Environment=PYTHONPATH=/home/volumio/sable/src
 # --stage full = clock + live Volumio listener + rotary + live CAVA spectrum
 # (Sable's own cava on MPD's /tmp/cava.fifo). run_hardware handles SIGTERM and
 # releases SPI/GPIO cleanly in its finally block.
-# Runs from Sable's OWN virtualenv (created by install.sh with
-# --system-site-packages, so it sees apt's RPi.GPIO but its luma/Pillow/socketio
-# are isolated from Volumio's system Python -- installing Sable can never disturb
-# Volumio's own packages).
-ExecStart=/home/volumio/sable/.venv/bin/python -u -m sable.app --hardware --stage full
+ExecStart=/usr/bin/python3 -u -m sable.app --hardware --stage full
 Restart=always
 RestartSec=3
 KillSignal=SIGTERM
