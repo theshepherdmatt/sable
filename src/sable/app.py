@@ -406,7 +406,7 @@ class App:
         splash = self.fsm.screens["splash"]
 
         def waiting():
-            splash.subtitle = "waiting for clock"
+            splash.subtitle = "waiting for network"
             self.render()
 
         synced = clock_gate.wait_for_clock(timeout=45.0, on_wait=waiting)
@@ -630,7 +630,7 @@ def run_hardware(stage="clock", rotate=hardware.OLED.rotate, contrast=None,
         threading.Thread(target=tick_loop, daemon=True, name="sable-tick").start()
 
         def waiting():
-            splash.subtitle = "waiting for clock"
+            splash.subtitle = "waiting for network"
 
         synced = clock_gate.wait_for_clock(timeout=45.0, on_wait=waiting)
         log("clock trustworthy:", synced)
