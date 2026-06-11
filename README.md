@@ -71,8 +71,9 @@ Then enable **Settings -> Plugins -> Installed Plugins -> Sable**. See
   and the screensaver timings are there too (and in the web plugin).
 - **Buttons** (1-6): play / pause / previous / next / random / repeat. Button 8 is
   the hardware power button (untouched by software).
-- **IR**: the ApEvo remote profile maps OK/MENU/arrows/transport. IR needs a LIRC
-  remote profile (see Debugging); buttons + rotary work without it.
+- **IR**: the **ApEvo** remote profile is installed by `install.sh` and maps
+  OK/MENU/arrows/transport. Using a different remote? Replace
+  `config/lirc/lircd.conf` (keep the `KEY_*` names) and re-run `install.sh`.
 
 ## Updating
 
@@ -98,7 +99,7 @@ journalctl -u sable.service -f           # live log (every screen switch, errors
 | **"Refusing --hardware: quadify.service is ACTIVE"** | The old quadify plugin is fighting for SPI/GPIO. Re-run `install.sh` (it retires those units), or `sudo systemctl stop quadify.service`. |
 | **No spectrum / VU needles flat** | `which cava` (must be installed). Is the source MPD-routed? **Radio, Spotify, AirPlay bypass MPD**, so they have no spectrum -- by design. Test with a local track. Check `/tmp/cava.fifo` exists. |
 | **Buttons / LEDs dead** | I2C enabled + MCP present? `i2cdetect -y 1` should show `20`. If the bus is missing, controls are disabled (logged). |
-| **IR remote does nothing** | `systemctl is-active lircd`, and a remote profile (`lircd.conf`) for your remote must be loaded. `irw` should print key names on a press. Buttons/rotary are unaffected. |
+| **IR remote does nothing** | `systemctl is-active lircd`; `irw` should print key names (e.g. `KEY_OK`) on a press. `/dev/lirc0` exists only after the gpio-ir overlay + reboot. Different remote -> replace `config/lirc/lircd.conf` and re-run `install.sh`. Buttons/rotary are unaffected. |
 | **Clock never appears** | It shows when stopped, or after `screensaver.clock_after_s` (default 300 s) of being paused. Tune it in the web plugin. |
 | **Panel dims / sleeps too soon or never** | `screensaver.dim_s` (dim + pixel-shift) and `idle_s` (OLED off). Any input or playback wakes it instantly. `0` disables a tier. |
 | **Settings change ignored** | Valid JSON? `cat config/settings.json`. The web plugin pings the app to reload; if the app is down the file still saves -- restart to apply. |

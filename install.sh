@@ -67,6 +67,18 @@ add_overlay "dtparam=i2c_arm=on"
 add_overlay "dtoverlay=gpio-ir,gpio_pin=4"
 add_overlay "dtoverlay=gpio-shutdown,gpio_pin=17,active_low=1,gpio_pull=up"
 
+# 3b. IR (LIRC): the ApEvo remote profile + daemon options, plus a boot hook that
+# neutralises irexec and opens the lircd socket for Sable. Sable's in-process IR
+# listener reads /run/lirc/lircd. Different remote? Replace config/lirc/lircd.conf.
+log "configuring LIRC (ApEvo remote profile) ..."
+sudo tee /etc/lirc/lircd.conf      < "$SABLE_DIR/config/lirc/lircd.conf"      >/dev/null
+sudo tee /etc/lirc/lirc_options.conf < "$SABLE_DIR/config/lirc/lirc_options.conf" >/dev/null
+sudo tee /usr/local/bin/sable-lirc-post.sh < "$SABLE_DIR/bin/sable-lirc-post.sh" >/dev/null
+sudo chmod +x /usr/local/bin/sable-lirc-post.sh
+sudo tee /etc/systemd/system/sable-lirc-post.service < "$SABLE_DIR/systemd/sable-lirc-post.service" >/dev/null
+sudo systemctl daemon-reload
+sudo systemctl enable lircd.service sable-lirc-post.service >/dev/null 2>&1 || true
+
 # 4. Retire conflicting quadify units IF present (kept, just moved aside) -----
 # They own the same SPI/GPIO + the PCM fifo reader Sable uses. The quadify plugin
 # re-enables some on boot, and they are real files in /etc/systemd/system (so
@@ -92,9 +104,12 @@ if [ "$REBOOT_NEEDED" -eq 1 ]; then
     log "kernel overlays were added -- REBOOT required for SPI/I2C/IR."
     log "run: sudo reboot   (Sable starts automatically on boot)"
 else
+    sudo systemctl restart lircd.service 2>/dev/null || true
+    sudo systemctl restart sable-lirc-post.service 2>/dev/null || true
     sudo systemctl restart sable.service
     sleep 4
     log "sable.service: $(systemctl is-active sable.service) / $(systemctl is-enabled sable.service)"
+    log "lircd:         $(systemctl is-active lircd.service 2>/dev/null)"
 fi
 
 log "done. Watch it with:  journalctl -u sable.service -f"

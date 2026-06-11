@@ -1,0 +1,12 @@
+[Unit]
+Description=Sable LIRC post-setup (neutralise irexec, open the lircd socket)
+After=lircd.service
+Wants=lircd.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/sable-lirc-post.sh
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
