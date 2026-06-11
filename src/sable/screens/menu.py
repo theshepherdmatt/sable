@@ -34,14 +34,29 @@ class MenuScreen(Screen):
                 ("Spectrum Mirror", lambda: self._set_spectrum("mirror")),
                 ("Spectrum Ribbon", lambda: self._set_spectrum("ribbon")),
                 ("Back", _BACK),
-            ]),
+            ], self._display_mode_label),
             ("Brightness", [
                 ("Low", lambda: self._set_brightness("low")),
                 ("Medium", lambda: self._set_brightness("medium")),
                 ("High", lambda: self._set_brightness("high")),
                 ("Back", _BACK),
-            ]),
+            ], lambda: self.app.settings.get(
+                "display", "brightness", default="medium").capitalize()),
         ]
+
+    def _display_mode_label(self):
+        screen = self.app.settings.get("display", "screen", default="modern")
+        if screen != "spectrum":
+            return "Modern"
+        return self.app.settings.get(
+            "display", "spectrum_style", default="bars").capitalize()
+
+    @staticmethod
+    def _unpack(item):
+        """Items are (label, target) or (label, target, value_fn)."""
+        if len(item) == 3:
+            return item[0], item[1], item[2]
+        return item[0], item[1], None
 
     @staticmethod
     def _frame(label, items):
@@ -64,7 +79,7 @@ class MenuScreen(Screen):
     def handle_select(self):
         self.app.fsm.reset_menu_timer()
         f = self._cur
-        _label, target = f["items"][f["index"]]
+        _label, target, _vfn = self._unpack(f["items"][f["index"]])
         if target == _BACK:
             self._pop()
         elif isinstance(target, list):
@@ -108,15 +123,19 @@ class MenuScreen(Screen):
         self.app.set_brightness_from_settings()
 
     # --- render ---
+    def _row_value(self, label, target, vfn):
+        if vfn is not None:
+            return vfn()         # a live value (e.g. Display Mode -> "Mirror")
+        if isinstance(target, list):
+            return ">"           # a submenu (has children)
+        return None              # a leaf action / back -> no affordance
+
     def render(self, canvas, draw, w, h):
         f = self._cur
-        items, index = f["items"], f["index"]
-        self.text(canvas, (4, 1), f["label"], self.app.fonts.get("sans_bold", 12), fill=255)
-        item_font = self.app.fonts.get("sans", 12)
-        start = max(0, min(index - 1, len(items) - self.ROWS))
-        for i in range(start, min(start + self.ROWS, len(items))):
-            y = self.TOP + (i - start) * self.ROW_H
-            selected = i == index
-            if selected:
-                draw.rectangle((0, y - 1, w - 1, y + self.ROW_H - 3), fill=255)
-            self.text(canvas, (6, y), items[i][0], item_font, fill=0 if selected else 255)
+        rows = []
+        for item in f["items"]:
+            label, target, vfn = self._unpack(item)
+            rows.append((label, self._row_value(label, target, vfn)))
+        self.draw_menu_surface(canvas, draw, w, h, f["label"], rows, f["index"],
+                               key_prefix="menu", top=self.TOP, row_h=self.ROW_H,
+                               nrows=self.ROWS)

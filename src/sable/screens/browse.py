@@ -109,21 +109,16 @@ class BrowseScreen(Screen):
     # --- render ---
     def render(self, canvas, draw, w, h):
         f = self._cur
-        self.text(canvas, (4, 1), f["title"], self.app.fonts.get("sans_bold", 12), fill=255)
-        item_font = self.app.fonts.get("sans", 12)
         if self.loading:
-            self.text(canvas, (6, self.TOP + self.ROW_H), "Loading...", item_font, fill=255)
+            self.text(canvas, (4, 1), (f["title"] or "").upper(),
+                      self.app.fonts.get("sans_bold", 10), fill=120)
+            self.text(canvas, (8, self.TOP + self.ROW_H), "Loading...",
+                      self.app.fonts.get("sans", 12), fill=130)
             return
-        items, index = f["items"], f["index"]
-        if not items:
-            self.text(canvas, (6, self.TOP + self.ROW_H), "(empty)", item_font, fill=255)
-            return
-        start = max(0, min(index - 1, len(items) - self.ROWS))
-        for i in range(start, min(start + self.ROWS, len(items))):
-            y = self.TOP + (i - start) * self.ROW_H
-            selected = i == index
-            if selected:
-                draw.rectangle((0, y - 1, w - 1, y + self.ROW_H - 3), fill=255)
-            label = items[i].get("title") or items[i].get("name") or "?"
-            self.draw_text_clipped(canvas, "br_%d" % i, label, item_font,
-                                   6, y, w - 8, fill=0 if selected else 255)
+        rows = []
+        for it in f["items"]:
+            label = it.get("title") or it.get("name") or "?"
+            rows.append((label, ">" if _is_folder(it) else None))
+        self.draw_menu_surface(canvas, draw, w, h, f["title"], rows, f["index"],
+                               key_prefix="br", top=self.TOP, row_h=self.ROW_H,
+                               nrows=self.ROWS)

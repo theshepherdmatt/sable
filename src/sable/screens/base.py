@@ -58,6 +58,47 @@ class Screen:
             b = font.getbbox(text)
             return b[2] - b[0]
 
+    @staticmethod
+    def _hgrad(w, h, left, right):
+        """A horizontal 2-stop grey gradient image (left->right), built by
+        resizing a 2x1 ramp. Used for the selection bar."""
+        stop = Image.new("L", (2, 1), 0)
+        stop.putpixel((0, 0), left)
+        stop.putpixel((1, 0), right)
+        return stop.resize((max(1, w), max(1, h)), Image.BILINEAR)
+
+    def draw_menu_surface(self, canvas, draw, w, h, header, rows, index,
+                          key_prefix="m", top=16, row_h=16, nrows=3):
+        """Shared 'designed list' surface for the menu and browser: a dim header,
+        a gradient selection bar with a bright left accent (dark text on it), and
+        an optional right-aligned value/chevron per row. Long labels scroll
+        (clipped). rows = list of (label, value_or_None)."""
+        self.text(canvas, (4, 1), (header or "").upper(),
+                  self.app.fonts.get("sans_bold", 10), fill=120)
+        label_font = self.app.fonts.get("sans", 12)
+        val_font = self.app.fonts.get("sans", 10)
+        if not rows:
+            self.text(canvas, (8, top + row_h), "(empty)", label_font, fill=110)
+            return
+        start = max(0, min(index - 1, max(0, len(rows) - nrows)))
+        for i in range(start, min(start + nrows, len(rows))):
+            y = top + (i - start) * row_h
+            selected = i == index
+            label, value = rows[i]
+            if selected:
+                canvas.paste(self._hgrad(w, row_h - 1, 255, 150), (0, y - 1))
+                draw.rectangle((0, y - 1, 1, y + row_h - 3), fill=255)  # accent
+                fg, vg = 0, 55
+            else:
+                fg, vg = 220, 110
+            reserve = 0
+            if value:
+                vw = self.text_width(draw, value, val_font)
+                self.text(canvas, (w - vw - 5, y + 1), value, val_font, fill=vg)
+                reserve = vw + 9
+            self.draw_text_clipped(canvas, "%s_%d" % (key_prefix, i), label,
+                                   label_font, 8, y, w - 8 - reserve, fill=fg)
+
     def text(self, canvas, xy, text, font, fill=255, anchor=None):
         """Crisp (non-antialiased) text on the greyscale canvas.
 
