@@ -24,6 +24,30 @@ def _mmss(seconds):
     return "%d:%02d" % (seconds // 60, seconds % 60)
 
 
+# Volumio `service` -> a short, panel-legible SOURCE tag. Brand logos do not
+# survive a 16px greyscale shrink, so the source is shown as a wordmark tag.
+# Unknown services fall back to the upper-cased service value.
+_SERVICE_LABELS = {
+    "mpd": "LIBRARY",
+    "webradio": "RADIO",
+    "tidal": "TIDAL",
+    "qobuz": "QOBUZ",
+    "spotify": "SPOTIFY", "spop": "SPOTIFY",
+    "airplay": "AIRPLAY", "airplay_emulation": "AIRPLAY",
+    "rp2": "RADIO PARADISE", "radioparadise": "RADIO PARADISE",
+    "radio_paradise": "RADIO PARADISE",
+    "motherearthradio": "MOTHER EARTH",
+    "bluetooth": "BLUETOOTH", "bt": "BLUETOOTH",
+}
+
+
+def _service_label(service):
+    s = (service or "").strip().lower()
+    if not s:
+        return ""
+    return _SERVICE_LABELS.get(s, s.upper())
+
+
 class ModernScreen(Screen):
     name = "modern"
     ART = 64
@@ -87,7 +111,7 @@ class ModernScreen(Screen):
                                fill=125 if paused else 255)
         self.draw_text_clipped(canvas, "artist", line2,
                                self.app.fonts.get("sans", 11), tx, 19, tw,
-                               fill=85 if paused else 175)
+                               fill=85 if paused else 165)
 
         if paused:
             self._render_paused(canvas, draw, tx, w, h, st)
@@ -97,20 +121,21 @@ class ModernScreen(Screen):
         if self.app.spectrum_available():
             self._render_level_bars(canvas, draw, tx, w, h)
 
-        # --- meta line: play glyph + samplerate/bitdepth ... volume ---
+        # --- meta line: SOURCE tag (left) + samplerate/bitdepth ... volume.
+        # Distinct grey tiers, brightest=title -> dimmest=specs, so the row reads
+        # as a hierarchy rather than one flat band: source 145 > specs/vol 100. ---
         meta_f = self.app.fonts.get("sans", 9)
         iy = 33
-        icon = self.app.icons.get("play")
-        if icon is not None:
-            canvas.paste(icon.convert("L"), (tx, iy))
-            mx = tx + icon.width + 4
-        else:
-            mx = tx
+        mx = tx
+        tag = _service_label(st.service)
+        if tag:
+            self.text(canvas, (tx, iy + 1), tag, meta_f, fill=150)
+            mx = tx + self.text_width(draw, tag, meta_f) + 9
         meta = "  ".join(x for x in (st.samplerate, st.bitdepth) if x)
-        self.text(canvas, (mx, iy + 1), meta, meta_f, fill=135)
+        self.text(canvas, (mx, iy + 1), meta, meta_f, fill=100)
         vol = "Vol %d" % st.volume
         vw = self.text_width(draw, vol, meta_f)
-        self.text(canvas, (w - vw - 2, iy + 1), vol, meta_f, fill=135)
+        self.text(canvas, (w - vw - 2, iy + 1), vol, meta_f, fill=100)
 
         # --- refined progress + remaining time ---
         self._render_progress(canvas, draw, tx, w, h, st)
@@ -210,12 +235,12 @@ class ModernScreen(Screen):
             return
         label = "-" + _mmss(st.duration_s - self.app.store.live_position_ms() / 1000.0)
         tw = self.text_width(draw, label, f)
-        self.text(canvas, (w - 2, h - 9), label, f, fill=130, anchor="ra")
+        self.text(canvas, (w - 2, h - 9), label, f, fill=120, anchor="ra")
         right = w - tw - 6
         draw.line((tx, py, right, py), fill=24)
         fillw = int(max(0, right - tx) * self.app.store.progress_fraction())
         if fillw > 0:
-            draw.line((tx, py, tx + fillw, py), fill=130)
+            draw.line((tx, py, tx + fillw, py), fill=150)
 
     def _render_paused(self, canvas, draw, tx, w, h, st):
         py = 39
