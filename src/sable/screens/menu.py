@@ -25,7 +25,6 @@ class MenuScreen(Screen):
 
     def _build_tree(self):
         return [
-            ("Music", self._open_browse),
             ("Now Playing", self._now_playing),
             ("Display Mode", [
                 ("Modern: Panel", lambda: self._set_modern("panel")),

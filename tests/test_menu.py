@@ -60,7 +60,7 @@ def test_select_drills_into_submenu():
     app = _app()
     app.go("menu")
     m = app.fsm.screens["menu"]
-    m._cur["index"] = 2                  # Display Mode (a submenu)
+    m._cur["index"] = 1                  # Display Mode (a submenu; Now Playing is 0)
     m.handle_select()
     assert len(m.stack) == 2
     assert m._cur["label"] == "Display Mode"

@@ -17,11 +17,14 @@ NOWPLAYING = "@nowplaying"
 # current_state -> { event -> target_state }
 TABLE = {
     "splash":   {"ready": "clock"},
-    "clock":    {"play": NOWPLAYING, "menu": "menu"},
-    # now-playing: a select opens the menu (no longer dumps to clock); stop -> clock
-    # is the only auto-exit. App.reconcile_screen() backstops any missed play edge.
-    "modern":   {"stop": "clock", "menu": "menu"},
-    "spectrum": {"stop": "clock", "menu": "menu"},
+    "clock":    {"play": NOWPLAYING, "menu": "home"},
+    # now-playing: a select opens the home carousel (no longer dumps to clock);
+    # stop -> clock is the only auto-exit. reconcile_screen() backstops play edges.
+    "modern":   {"stop": "clock", "menu": "home"},
+    "spectrum": {"stop": "clock", "menu": "home"},
+    # home = the dynamic sources carousel; menu = the settings list (reached from
+    # the carousel's Settings entry). Both fall back to the clock when left idle.
+    "home":     {"back": "clock", "timeout": "clock"},
     "menu":     {"back": "clock", "timeout": "clock"},
 }
 
@@ -91,5 +94,5 @@ class FSM:
             self._menu_timer = None
 
     def _menu_expired(self):
-        if self.current is not None and self.current.name == "menu":
+        if self.current is not None and self.current.name in ("menu", "home"):
             self.dispatch("timeout")

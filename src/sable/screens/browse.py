@@ -52,6 +52,13 @@ class BrowseScreen(Screen):
         super().__init__(app)
         self.stack = [self._frame("Music", list(_ROOTS))]
         self.loading = False
+        self._open = None          # (uri, title) when entered from the home carousel
+        self._replace_top = False
+
+    def open_source(self, uri, title):
+        """Enter the browser at a Volumio source uri (set by the home carousel
+        before app.go('browse'))."""
+        self._open = (uri, title)
 
     @staticmethod
     def _frame(title, items):
@@ -62,8 +69,20 @@ class BrowseScreen(Screen):
         return self.stack[-1]
 
     def on_enter(self, **kwargs):
-        self.stack = [self._frame("Music", list(_ROOTS))]
-        self.loading = False
+        op = self._open
+        self._open = None
+        if op and op[0]:
+            uri, title = op
+            self.stack = [self._frame(title, [])]
+            self._pending_title = title
+            self._replace_top = True       # the first result IS the root frame
+            self.loading = True
+            if self.app.listener is not None:
+                self.app.listener.browse(uri)
+        else:
+            self.stack = [self._frame("Music", list(_ROOTS))]
+            self.loading = False
+            self._replace_top = False
 
     # --- input ---
     def handle_scroll(self, delta):
@@ -95,14 +114,19 @@ class BrowseScreen(Screen):
             self.stack.pop()
             self.loading = False
         else:
-            self.app.go("menu")
+            self.app.go("home")          # back to the sources carousel
 
     # --- async browse result (called on the listener thread) ---
     def on_browse_data(self, data):
         if not self.loading:
             return
         items, _prev = _items_from_response(data)
-        self.stack.append(self._frame(getattr(self, "_pending_title", "..."), items))
+        frame = self._frame(getattr(self, "_pending_title", "..."), items)
+        if self._replace_top:
+            self.stack[-1] = frame       # carousel entry: result becomes the root
+            self._replace_top = False
+        else:
+            self.stack.append(frame)     # drilling deeper
         self.loading = False
         self.app.render()
 

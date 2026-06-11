@@ -37,6 +37,7 @@ class VolumioListener:
         # pushBrowseLibrary as the answer to its last browse() call.
         self.on_browse = None
         self.on_sources = None
+        self.browse_sources = []   # latest getBrowseSources result (HomeScreen reads it)
         self.sio = socketio.Client(reconnection=False)  # we own reconnect
         self._wire()
 
@@ -83,6 +84,7 @@ class VolumioListener:
         def _on_push_browse_sources(data):
             n = len(data) if isinstance(data, list) else "?"
             self.log("  pushBrowseSources -> %s sources" % (n,))
+            self.browse_sources = data if isinstance(data, list) else []
             cb = self.on_sources
             if cb:
                 try:

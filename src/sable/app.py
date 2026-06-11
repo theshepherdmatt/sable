@@ -32,6 +32,7 @@ from .screens.menu import MenuScreen
 from .screens.meter import MeterScreen
 from .screens.modern import ModernScreen
 from .screens.browse import BrowseScreen
+from .screens.home import HomeScreen
 from .screens.splash import SplashScreen
 from .settings import Settings
 from .state import StateStore
@@ -94,7 +95,8 @@ class App:
         self._render_lock = threading.Lock()
         self.listener = None   # set on hardware/live runs; BrowseScreen uses it
         screens = [SplashScreen(self), ClockScreen(self), MenuScreen(self),
-                   ModernScreen(self), MeterScreen(self), BrowseScreen(self)]
+                   ModernScreen(self), MeterScreen(self), BrowseScreen(self),
+                   HomeScreen(self)]
         self.fsm = FSM(self, screens, log=log)
         self.store.subscribe(self._on_state)
         self.last_input = time.monotonic()
@@ -774,8 +776,10 @@ def run_hardware(stage="clock", rotate=hardware.OLED.rotate, contrast=None,
             from .volumio.listener import VolumioListener
             listener = VolumioListener(app.store, log=log)
             app.listener = listener
-            # Route async browse responses to the BrowseScreen.
+            # Route async browse responses to the BrowseScreen, and the live source
+            # list to the home carousel.
             listener.on_browse = app.fsm.screens["browse"].on_browse_data
+            listener.on_sources = app.fsm.screens["home"].refresh_sources
             listener.start()
             log("Volumio listener started.")
 
