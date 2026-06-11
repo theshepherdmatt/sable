@@ -71,6 +71,9 @@ class ModernScreen(Screen):
             self._reader.close()
             self._reader = None
 
+    def handle_scroll(self, delta):
+        self.app.nudge_volume(delta)      # turning the knob on now-playing = volume
+
     def handle_select(self):
         self.app.fsm.dispatch("menu")
 

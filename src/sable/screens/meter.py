@@ -64,6 +64,9 @@ class MeterScreen(Screen):
     def on_exit(self):
         self.reader.close()
 
+    def handle_scroll(self, delta):
+        self.app.nudge_volume(delta)      # turning the knob on now-playing = volume
+
     def handle_select(self):
         self.app.fsm.dispatch("menu")
 

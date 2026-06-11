@@ -158,6 +158,15 @@ class VolumioListener:
         except Exception:
             pass
 
+    def set_volume(self, arg):
+        """Adjust Volumio's volume. arg = '+' / '-' / 'mute' / 'unmute', or an int
+        0..100. A no-op on devices with no software mixer (a DAC that owns volume),
+        so it is safe to call everywhere."""
+        try:
+            self.sio.emit("volume", arg)
+        except Exception:
+            pass
+
     def play_all(self, items):
         """Play a whole album/list: replace the queue with the first leaf, then
         append the rest. `items` are Volumio browse leaves ({uri, service, type,

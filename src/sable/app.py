@@ -124,6 +124,7 @@ class App:
         self._pause_timer = None
         self._pause_idle = False
         self._osd = None               # (big, small, until_monotonic) | None
+        self._osd_volume = False       # the live OSD shows the current volume + bar
 
     def nowplaying_screen(self):
         """Resolve the now-playing screen for the FSM @nowplaying token. A spectrum
@@ -388,10 +389,21 @@ class App:
     # --- transient OSD overlay (volume / mute / DAC-input hints) -------------
     def show_osd(self, big, small="", duration=1.4):
         """Flash a centred overlay for `duration`s over whatever is on screen.
-        Used for OPEN-LOOP hints: the DAC handles volume/mute itself
-        (Volumio mixer_type=None) and the DAC input is remote-only, so Sable just
-        shows the change as feedback -- it does not drive it."""
+        Used for mute / DAC-input hints (some are open-loop: a DAC that owns volume
+        handles the change and Sable just shows feedback)."""
         self._osd = (big, small, time.monotonic() + duration)
+        self._osd_volume = False
+        self.render()
+
+    def nudge_volume(self, delta):
+        """Rotary/IR volume: drive Volumio's mixer (a no-op on a DAC that owns
+        volume) and flash a LIVE volume OSD (number + bar, re-read each frame so it
+        tracks Volumio's volume event)."""
+        self.note_activity()
+        if self.listener is not None:
+            self.listener.set_volume("+" if delta > 0 else "-")
+        self._osd = (None, "VOLUME", time.monotonic() + 1.3)
+        self._osd_volume = True
         self.render()
 
     def _draw_osd(self, img):
@@ -400,11 +412,27 @@ class App:
         big, small, until = self._osd
         if time.monotonic() >= until:
             self._osd = None
+            self._osd_volume = False
             return img
-        from PIL import Image
+        from PIL import Image, ImageDraw
         from .screens.base import crisp_text
         out = Image.blend(img, Image.new("L", img.size, 0), 0.8)   # dim the screen
         w, h = img.size
+        if self._osd_volume:
+            vol = max(0, min(100, self.store.get().volume))
+            crisp_text(out, (w // 2, 11), "VOLUME",
+                       self.fonts.get("sans", 9), fill=150, anchor="mm")
+            crisp_text(out, (w // 2, 30), "%d" % vol,
+                       self.fonts.get("sans_bold", 22), fill=255, anchor="mm")
+            d = ImageDraw.Draw(out)
+            bw = int(w * 0.62)
+            bx = (w - bw) // 2
+            by = h - 13
+            d.rectangle((bx, by, bx + bw, by + 5), outline=80)
+            fillw = int(bw * vol / 100)
+            if fillw > 0:
+                d.rectangle((bx, by, bx + fillw, by + 5), fill=225)
+            return out
         if small:
             crisp_text(out, (w // 2, h // 2 - 14), small,
                        self.fonts.get("sans", 11), fill=160, anchor="mm")
@@ -478,9 +506,10 @@ class App:
             else:
                 self._transport(cmd)
         elif cmd == "volume":
-            # Open-loop hint: the DAC changes its own volume; we just flash it.
-            self.show_osd("+" if arg == "+" else "-", "VOLUME")
+            self.nudge_volume(1 if arg == "+" else -1)
         elif cmd == "mute":
+            if self.listener is not None:
+                self.listener.set_volume("mute")
             self.show_osd("MUTE")
         elif cmd == "dac_input":
             self._dac_input()

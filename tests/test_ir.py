@@ -1,4 +1,4 @@
-"""IR mode-aware key mapping + the open-loop volume/mute/input OSD.
+"""IR mode-aware key mapping + the volume/mute/input OSD.
 Run: python3 tests/test_ir.py
 """
 import os
@@ -64,14 +64,12 @@ def test_osd_overlay_changes_frame_then_expires():
     assert list(out.getdata()) == list(base.getdata())         # nothing drawn
 
 
-def test_volume_and_mute_commands_raise_osd_without_changing_volume():
+def test_volume_and_mute_commands_raise_osd():
     app = _app()
-    vol_before = app.store.get().volume
     app.handle("volume", "+")
-    assert app._osd[0] == "+" and app._osd[1] == "VOLUME"
+    assert app._osd_volume and app._osd[1] == "VOLUME"         # live volume OSD
     app.handle("mute")
-    assert app._osd[0] == "MUTE"
-    assert app.store.get().volume == vol_before                # open-loop: unchanged
+    assert app._osd[0] == "MUTE" and not app._osd_volume
 
 
 def test_transport_suppressed_with_hint_during_airplay():
