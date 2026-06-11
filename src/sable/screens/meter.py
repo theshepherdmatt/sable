@@ -50,7 +50,7 @@ class MeterScreen(Screen):
         # Geometry matched to assets/vuscreen.png (twin arcs, scale -20..+6). The
         # pivot sits below the panel; the needle sweeps +/- _vu_swing degrees from
         # vertical to track the printed arc.
-        self._vu_len = 72
+        self._vu_len = 50
         self._vu_swing = 46                        # degrees each side of vertical
         self._vu_centres = ((67, 88), (191, 88))   # L/R pivots (off the bottom edge)
         self._dial = None                          # cached dial face | False
