@@ -82,12 +82,17 @@ prompt). Install files into root dirs via `sudo tee < src > /dev/null` or
 - The **quadify plugin is still installed** -- do NOT uninstall it yet: Sable uses
   its `cava` binary (`/data/plugins/system_hardware/quadify/cava/bin/cava`) and the
   LIRC setup. Bundling cava into Sable would remove this last coupling.
-- `~/sable` is **NOT a git repo** -- no version control yet.
+- `~/sable` is a **local git repo** (branch `main`, initial commit `42b6d09`, 61
+  files, cruft-free). `config/settings.json` is gitignored; `config/settings.default.json`
+  is committed (app falls back to in-code DEFAULTS when the live file is absent).
+  Pushed to **github.com/theshepherdmatt/sable** (remote `origin`, branch `main`).
 - MCP23017 hardware fault (the old `[Errno 5]` at 0x20) was **fixed by the user**
   (rewiring) 2026-06-10; buttons + LEDs work.
 
 ## Deferred / TODO
-1. **Version control** -- get `~/sable` into git (only the Pi + PC mirror exist).
+1. **Version control** -- DONE. Local git + pushed to GitHub
+   (github.com/theshepherdmatt/sable, branch `main`). Remaining: re-point
+   `sable-stage` to a clone so Pi/GitHub/PC stay in sync (Pi = source of truth).
 2. **All-source spectrum** -- only MPD-routed audio feeds bars; Spotify/AirPlay/
    rp2 bypass MPD. `snd-aloop` is NOT on this kernel; an ALSA `type file` tee
    risks stalling audio. Needs bench care. (rp2 also was flaky on Evo -- don't test with it.)
