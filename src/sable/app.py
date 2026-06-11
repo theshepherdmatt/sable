@@ -98,6 +98,11 @@ class App:
         self._base_contrast = hardware.CONTRAST.medium
         self._cur_contrast = self._base_contrast
         self._idle_tier = "awake"
+        # Screen-to-screen crossfade (dissolve old frame into new over _fade_s).
+        self._last_frame = None
+        self._rendered_screen = None
+        self._fade = None              # (old_image, start_monotonic) | None
+        self._fade_s = 0.22
         self._stop_timer = None        # deferred stop->clock fall-back (Fix 2)
         self._stop_grace_s = 1.5
         self._last_switch_t = 0.0      # auto-transition cooldown (Fix 3)
@@ -286,6 +291,11 @@ class App:
         self._set_contrast(self._cur_contrast - step)
         if self._cur_contrast <= 0:
             self.asleep = True
+            # Drop any in-flight fade + stale frame so WAKE is instant, not a
+            # dissolve from the pre-sleep image.
+            self._fade = None
+            self._last_frame = None
+            self._rendered_screen = None
             try:
                 self.display.sleep()
             except Exception:
@@ -300,11 +310,35 @@ class App:
         with self._render_lock:
             img = self.display.blank_canvas()
             draw = ImageDraw.Draw(img)
-            if self.fsm.current is not None:
-                self.fsm.current.render(img, draw, self.display.width, self.display.height)
+            cur = self.fsm.current
+            if cur is not None:
+                cur.render(img, draw, self.display.width, self.display.height)
             if self._idle_tier == "dim":
                 img = self._burn_in_shift(img)
-            self.display.present(img)
+            cur_name = cur.name if cur is not None else None
+            out = self._with_transition(img, cur_name)
+            self.display.present(out)
+            self._last_frame = img
+            self._rendered_screen = cur_name
+
+    def _with_transition(self, img, cur_name):
+        """Crossfade: when the screen changed since the last present, dissolve the
+        previous frame into the new one over _fade_s. A pure function of time, so
+        the render tick animates it; never a barrier. Disable via display.transitions."""
+        if not self.settings.get("display", "transitions", default=True):
+            return img
+        if (self._last_frame is not None and cur_name != self._rendered_screen
+                and self._fade is None):
+            self._fade = (self._last_frame, time.monotonic())
+        if self._fade is None:
+            return img
+        old, t0 = self._fade
+        alpha = (time.monotonic() - t0) / self._fade_s
+        if alpha >= 1.0 or old.size != img.size or old.mode != img.mode:
+            self._fade = None
+            return img
+        from PIL import Image
+        return Image.blend(old, img, alpha)
 
     def _burn_in_shift(self, img):
         """While idle-dimmed, drift the whole frame by a few px on a slow cycle so

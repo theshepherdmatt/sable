@@ -16,6 +16,7 @@ DEFAULTS = {
         "spectrum": True,
         "rotate": 0,                 # luma quadrant 0..3
         "brightness": "high",        # low|medium|high -> hardware.CONTRAST
+        "transitions": True,         # crossfade between screens
     },
     "clock": {
         "font": "sans",              # sans|sevenseg
