@@ -30,6 +30,11 @@ def _songs(n):
     return [{"title": "T%d" % i, "type": "song", "uri": "u%d" % i} for i in range(n)]
 
 
+def _stations(n):
+    return [{"title": "Station %d" % i, "type": "webradio",
+             "service": "webradio", "uri": "http://s%d" % i} for i in range(n)]
+
+
 def _resp(items):
     return {"navigation": {"lists": [{"items": items}]}}
 
@@ -68,6 +73,16 @@ def test_folders_only_no_play_all():
     b._pending_title = "Artist"
     b.on_browse_data(_resp([{"title": "Alb%d" % i, "type": "folder", "uri": "a%d" % i}
                             for i in range(3)]))
+    assert not any(it.get("_play_all") for it in b._cur["items"])
+
+
+def test_radio_list_has_no_play_all():
+    app = build_sim_app(frames_dir=None)
+    b = app.fsm.screens["browse"]
+    b.loading = True
+    b._replace_top = False
+    b._pending_title = "Stations"
+    b.on_browse_data(_resp(_stations(5)))
     assert not any(it.get("_play_all") for it in b._cur["items"])
 
 

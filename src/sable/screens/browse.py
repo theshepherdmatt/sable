@@ -38,6 +38,21 @@ def _playables(items):
             if not it.get("_play_all") and not _is_folder(it) and it.get("uri")]
 
 
+_RADIO_TYPES = {"webradio", "mywebradio", "radio"}
+
+
+def _is_radio(item):
+    """Radio stations are individually playable but 'Play all' makes no sense for
+    them (you do not queue a list of stations)."""
+    return ((item.get("type") or "").lower() in _RADIO_TYPES
+            or (item.get("service") or "").lower() == "webradio")
+
+
+def _play_all_tracks(items):
+    """Leaves eligible for Play-all: playable, and NOT radio stations."""
+    return [it for it in _playables(items) if not _is_radio(it)]
+
+
 def _items_from_response(data):
     """Flatten navigation.lists[].items[] into one list; return (items, prev_uri)."""
     nav = (data or {}).get("navigation", {}) if isinstance(data, dict) else {}
@@ -106,7 +121,7 @@ class BrowseScreen(Screen):
             return
         item = f["items"][f["index"]]
         if item.get("_play_all"):
-            songs = _playables(f["items"])
+            songs = _play_all_tracks(f["items"])
             if songs and self.app.listener is not None:
                 self.app.listener.play_all(songs)
             self.app.go(self.app.nowplaying_screen())
@@ -133,7 +148,7 @@ class BrowseScreen(Screen):
         if not self.loading:
             return
         items, _prev = _items_from_response(data)
-        if len(_playables(items)) >= 2:           # an album/list -> offer Play all
+        if len(_play_all_tracks(items)) >= 2:     # album/track list (not radio)
             items = [{"title": "Play all", "_play_all": True}] + items
         frame = self._frame(getattr(self, "_pending_title", "..."), items)
         if self._replace_top:
