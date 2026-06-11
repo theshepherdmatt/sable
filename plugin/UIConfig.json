@@ -80,6 +80,9 @@
       "icon": "fa-moon-o",
       "onSave": { "type": "controller", "endpoint": "system_hardware/sable", "method": "saveScreensaver" },
       "content": [
+        { "id": "clock_after_s", "element": "input", "type": "number", "label": "Show clock after (seconds)", "value": 300,
+          "attributes": [{ "property": "min", "value": 0 }],
+          "description": "Idle/paused time before the now-playing screen falls to the clock. 0 = never." },
         { "id": "dim_s", "element": "input", "type": "number", "label": "Dim after (seconds)", "value": 120,
           "attributes": [{ "property": "min", "value": 0 }],
           "description": "Idle time before the panel dims and starts shifting (burn-in protection). 0 disables." },
@@ -87,7 +90,7 @@
           "attributes": [{ "property": "min", "value": 0 }],
           "description": "Idle time before the panel fades to black. 0 = never." }
       ],
-      "saveButton": { "label": "Save", "data": ["dim_s", "idle_s"] }
+      "saveButton": { "label": "Save", "data": ["clock_after_s", "dim_s", "idle_s"] }
     },
     {
       "id": "controls",

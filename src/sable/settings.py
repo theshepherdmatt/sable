@@ -13,22 +13,18 @@ DEFAULTS = {
     "display": {
         "screen": "modern",          # modern|spectrum
         "theme": "panel",            # panel|cinema (when screen == modern)
-        "spectrum_style": "bars",    # bars|dots|mirror|ribbon (screen == spectrum)
-        "spectrum": True,
-        "rotate": 0,                 # luma quadrant 0..3
+        "spectrum_style": "bars",    # bars|dots|mirror|ribbon|vu (screen == spectrum)
         "brightness": "high",        # low|medium|high -> hardware.CONTRAST
         "transitions": True,         # crossfade between screens
     },
     "clock": {
-        "font": "sans",              # sans|sevenseg
         "show_seconds": False,
         "show_date": False,
     },
     "screensaver": {
-        "type": "geo",               # none|snake|geo|sable (animated tier: future)
+        "clock_after_s": 300,        # paused/idle -> show the clock (0 = never)
         "dim_s": 120,                # idle -> dim (reduced contrast + pixel-shift)
         "idle_s": 3600,              # idle -> fade to OLED off (0 = never)
-        "sleep_s": 600,              # screensaver -> OLED off (0 = never)
     },
     "dac": {
         # Persisted HINT only. Tracks the remote INPUT button; user-correctable.

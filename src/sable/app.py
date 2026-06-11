@@ -111,6 +111,12 @@ class App:
         self._last_switch_t = 0.0      # auto-transition cooldown (Fix 3)
         self._switch_cooldown_s = 0.5
         self._first_state = True       # suppress stale-stop bounce on boot (Fix 4)
+        # Paused-idle -> clock: Volumio PAUSES (not stops) most local content when
+        # it goes idle, so the clock must follow a long pause too. A paused now-
+        # playing screen stays up (you may resume); after clock_after_s it falls to
+        # the clock. _pause_idle marks that fall so reconcile_screen leaves it.
+        self._pause_timer = None
+        self._pause_idle = False
 
     def nowplaying_screen(self):
         """Resolve the now-playing screen for the FSM @nowplaying token. A spectrum
@@ -135,8 +141,12 @@ class App:
 
     def base_screen(self):
         """The screen to show when NOT in a menu/browse overlay: now-playing while
-        active, the clock when stopped. Used for menu/browse exits."""
-        return self.nowplaying_screen() if self.store.get().status in ("play", "pause") else "clock"
+        playing (or recently paused), the clock when stopped or paused-idle. Used
+        for menu/browse exits."""
+        st = self.store.get().status
+        if st == "play" or (st == "pause" and not self._pause_idle):
+            return self.nowplaying_screen()
+        return "clock"
 
     def reconcile_screen(self):
         """Backstop for the edge-triggered screen switch. Run every render tick while
@@ -147,8 +157,11 @@ class App:
               source switched MPD<->rp2, so spectrum<->modern -- with no clock flash."""
         if self.asleep or self.fsm.current is None:
             return
-        if self.store.get().status not in ("play", "pause"):
+        status = self.store.get().status
+        if status not in ("play", "pause"):
             return
+        if status == "pause" and self._pause_idle:
+            return                      # intentionally idle on the clock; leave it
         cur = self.fsm.current.name
         want = self.nowplaying_screen()
         if cur == "clock" or (cur in ("modern", "spectrum") and cur != want):
@@ -160,6 +173,13 @@ class App:
     def _on_state(self, old, new):
         ev = status_event(old, new)
         first, self._first_state = self._first_state, False
+        # Paused-idle -> clock timer: arm on the pause edge, clear on anything else.
+        if new.status == "pause" and old.status != "pause":
+            self._pause_idle = False
+            self._arm_pause_timer()
+        elif new.status != "pause":
+            self._cancel_pause_timer()
+            self._pause_idle = False
         if ev == "play":
             self._cancel_stop_timer()
             if self._switch_due():
@@ -196,6 +216,31 @@ class App:
         if self.store.get().status not in ("play", "pause"):
             self._stamp_switch()
             self.fsm.dispatch("stop")
+
+    # --- deferred pause -> clock (idle clock for paused content) ---
+    def _arm_pause_timer(self):
+        self._cancel_pause_timer()
+        secs = self.settings.get("screensaver", "clock_after_s", default=300)
+        if not secs:
+            return
+        self._pause_timer = threading.Timer(secs, self._pause_timer_fire)
+        self._pause_timer.daemon = True
+        self._pause_timer.start()
+
+    def _cancel_pause_timer(self):
+        if self._pause_timer is not None:
+            self._pause_timer.cancel()
+            self._pause_timer = None
+
+    def _pause_timer_fire(self):
+        # Still paused after the grace -> fall to the clock. Reset the idle timer so
+        # the clock appears at full brightness and only THEN dims (dim_s) / sleeps.
+        self._pause_timer = None
+        if self.store.get().status == "pause":
+            self._pause_idle = True
+            self.last_input = time.monotonic()
+            self._stamp_switch()
+            self.go("clock")
 
     # --- auto-transition cooldown (Fix 3) ---
     def _switch_due(self):
@@ -257,9 +302,17 @@ class App:
         """Called each render tick. Playing or an open menu counts as activity
         (stay awake); otherwise walk the ladder by idle time: dim_s -> reduced
         contrast + pixel-shift, idle_s -> fade to dark then OLED off. Either
-        threshold == 0 disables that tier."""
-        if self.store.get().status == "play" or self.fsm.current.name == "menu":
+        threshold == 0 disables that tier.
+
+        A PAUSED now-playing screen is kept bright (you may resume) until the
+        pause timer falls it to the clock; only then does the dim/sleep ladder
+        run -- so the clock appears bright before it dims."""
+        cur = self.fsm.current.name if self.fsm.current is not None else None
+        if self.store.get().status == "play" or cur == "menu":
             self.note_activity()
+            return
+        if cur in ("modern", "spectrum") and not self._pause_idle:
+            self._tier_awake()
             return
         idle = now - self.last_input
         idle_s = self.settings.get("screensaver", "idle_s", default=3600)

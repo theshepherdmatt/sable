@@ -133,11 +133,13 @@ SablePlugin.prototype.getUIConfig = function () {
     .then(function (uiconf) {
       var s = self._read();
       self._fillSelect(uiconf, 'display_screen', self._get(s, 'display', 'screen', 'modern'));
+      self._fillSelect(uiconf, 'theme', self._get(s, 'display', 'theme', 'panel'));
       self._fillSelect(uiconf, 'spectrum_style', self._get(s, 'display', 'spectrum_style', 'bars'));
       self._fillSelect(uiconf, 'brightness', self._get(s, 'display', 'brightness', 'high'));
       self._fillSwitch(uiconf, 'transitions', self._get(s, 'display', 'transitions', true));
       self._fillSwitch(uiconf, 'show_seconds', self._get(s, 'clock', 'show_seconds', false));
       self._fillSwitch(uiconf, 'show_date', self._get(s, 'clock', 'show_date', false));
+      self._fillInput(uiconf, 'clock_after_s', self._get(s, 'screensaver', 'clock_after_s', 300));
       self._fillInput(uiconf, 'dim_s', self._get(s, 'screensaver', 'dim_s', 120));
       self._fillInput(uiconf, 'idle_s', self._get(s, 'screensaver', 'idle_s', 3600));
       self._fillSwitch(uiconf, 'leds_enabled', self._get(s, 'controls', 'leds_enabled', true));
@@ -164,6 +166,7 @@ SablePlugin.prototype._saved = function (msg) {
 SablePlugin.prototype.saveDisplay = function (data) {
   var s = this._read();
   this._set(s, 'display', 'screen', this._val(data.display_screen));
+  this._set(s, 'display', 'theme', this._val(data.theme));
   this._set(s, 'display', 'spectrum_style', this._val(data.spectrum_style));
   this._set(s, 'display', 'brightness', this._val(data.brightness));
   this._set(s, 'display', 'transitions', !!data.transitions);
@@ -185,6 +188,7 @@ SablePlugin.prototype.saveClock = function (data) {
 
 SablePlugin.prototype.saveScreensaver = function (data) {
   var s = this._read();
+  this._set(s, 'screensaver', 'clock_after_s', this._int(data.clock_after_s, 300));
   this._set(s, 'screensaver', 'dim_s', this._int(data.dim_s, 120));
   this._set(s, 'screensaver', 'idle_s', this._int(data.idle_s, 3600));
   this._write(s);
