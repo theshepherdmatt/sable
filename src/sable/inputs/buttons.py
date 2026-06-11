@@ -28,6 +28,10 @@ LED_SPARE = 1 << 6
 # Boot "power on" sweep order across all seven LEDs.
 LED_SWEEP = [LED_PLAY, LED_PAUSE, LED_PREV, LED_NEXT, LED_SHUFF, LED_REPEAT, LED_SPARE]
 
+# AirPlay: Volumio reports status=play even when paused and gives no reliable
+# play/pause signal, so a status LED would lie -- show none for these services.
+_AIRPLAY_SERVICES = ("airplay", "airplay_emulation")
+
 # Panel button id -> (Sable command or None, feedback LED). Button 8 (power) is
 # hardware-only and never appears here.
 _BUTTON_ACTION = {
@@ -172,7 +176,10 @@ class ButtonsLeds:
 
     def _desired_led(self, now=None):
         now = time.monotonic() if now is None else now
-        status = self.store.get().status
+        st = self.store.get()
+        if (st.service or "").strip().lower() in _AIRPLAY_SERVICES:
+            return 0                       # AirPlay: status unknowable -> no LED
+        status = st.status
         if status == "play":
             return LED_PLAY
         if status == "pause":

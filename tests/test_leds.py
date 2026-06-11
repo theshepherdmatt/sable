@@ -52,6 +52,15 @@ def test_paused_solid_when_asleep():
     assert bl._desired_led(now=1.2) == LED_PAUSE
 
 
+def test_airplay_shows_no_status_led():
+    # Volumio can't tell play from pause for AirPlay, so no status LED at all.
+    bl = _bl("play")
+    bl.store.apply_pushstate({"service": "airplay_emulation"})
+    assert bl._desired_led() == 0
+    bl.store.apply_pushstate({"status": "pause"})    # still AirPlay -> still none
+    assert bl._desired_led() == 0
+
+
 def test_boot_sweep_covers_all_seven_leds():
     bits = 0
     for led in LED_SWEEP:
