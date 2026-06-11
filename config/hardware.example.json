@@ -1,0 +1,11 @@
+{
+  "_comment": "Per-MACHINE OLED/rotary/MCP pin overrides (BCM numbers). Copy to config/hardware.json and keep ONLY the keys your board changes; anything omitted uses the frozen defaults in src/sable/hardware.py. This describes physical WIRING -- it is not a user setting and is never shown in the menu/web UI. config/hardware.json is gitignored (one per machine).",
+  "_default_evo_wiring": "The built-in defaults are the original EVO unit: oled dc=27, rst=24, blank=25.",
+  "_this_example_matches": "the standard/luma-default pinout (DISPLAY DC=GPIO24, RESET=GPIO25, CS=CE0) shown on the Quadify wiring diagram.",
+  "oled": {
+    "dc": 24,
+    "rst": 25,
+    "blank": 25,
+    "rotate": 0
+  }
+}

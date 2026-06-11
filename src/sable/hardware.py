@@ -5,6 +5,9 @@ exposed as editable config. User preferences live in settings.py instead.
 Splitting the two is a deliberate break from the old config.yaml, which mixed
 immutable pin numbers with user prefs and drifted across four stores.
 """
+import dataclasses
+import json
+import os
 from dataclasses import dataclass
 
 
@@ -53,10 +56,37 @@ class Contrast:
     high: int = 255
 
 
+# Per-MACHINE wiring overrides. The dataclasses above are the frozen DEFAULTS (the
+# original EVO Sabre unit). A board wired differently drops a config/hardware.json
+# next to settings.json with only the pins it changes, e.g.:
+#   {"oled": {"dc": 24, "rst": 25, "blank": 25}}
+# This is NOT a user setting (never exposed in the menu/plugin) -- it describes
+# physical wiring. Absent file or keys -> the defaults below. gitignored, like
+# settings.json (one per machine); see config/hardware.example.json.
+_OVERRIDE_PATH = os.path.normpath(
+    os.path.join(os.path.dirname(__file__), "..", "..", "config", "hardware.json"))
+
+
+def _load_overrides():
+    try:
+        with open(_OVERRIDE_PATH, "r") as fh:
+            return json.load(fh) or {}
+    except (FileNotFoundError, ValueError, OSError):
+        return {}
+
+
+def _build(cls, key, overrides):
+    """A frozen `cls` instance with any known keys from overrides[key] applied."""
+    valid = {f.name for f in dataclasses.fields(cls)}
+    changes = {k: v for k, v in (overrides.get(key) or {}).items() if k in valid}
+    return dataclasses.replace(cls(), **changes) if changes else cls()
+
+
+_OVERRIDES = _load_overrides()
 CONTRAST = Contrast()
-OLED = OledPins()
-ROTARY = RotaryPins()
-MCP = Mcp23017()
+OLED = _build(OledPins, "oled", _OVERRIDES)
+ROTARY = _build(RotaryPins, "rotary", _OVERRIDES)
+MCP = _build(Mcp23017, "mcp", _OVERRIDES)
 
 # Kernel overlays this project owns (set by install, not at runtime).
 # /boot/userconfig.txt:

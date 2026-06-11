@@ -29,3 +29,6 @@ config/settings.json
 
 # Backups of the retired quadify unit files -- not Sable's own code
 disabled-units/
+
+# Per-machine hardware pin overrides (wiring); see config/hardware.example.json
+config/hardware.json
