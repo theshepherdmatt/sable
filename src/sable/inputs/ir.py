@@ -5,14 +5,22 @@ Runs in-process on hardware (like the rotary). Replaces quadify's ir_listener.py
 lircd broadcasts each key to every connected client, so this coexists with any
 other listener without stealing events.
 
-MODE-AWARE mapping (ported from quadify's proven scheme): the same key does the
-natural thing for the current screen -- on a now-playing/clock screen OK is
-play/pause and LEFT/RIGHT skip tracks; in a menu/browse list OK/RIGHT select,
-LEFT goes back, UP/DOWN scroll.
+PHYSICAL REMOTE (Audiophonics EVO Sabre / "ApEvo") -- verified with irw. Only six
+buttons are usable for the UI; the rest drive the DAC directly:
+    SELECT button      -> KEY_MENU   (NOT KEY_OK!)
+    PLAY/PAUSE bar      -> KEY_OK
+    D-pad UP/DOWN/LEFT/RIGHT -> KEY_UP/DOWN/LEFT/RIGHT
+    VOL+ / VOL- / MUTE -> KEY_VOLUMEUP / KEY_VOLUMEDOWN / KEY_MUTE  (open-loop hint)
+    POWER / INPUT      -> DAC only -- ignored
 
-Volume/mute are OPEN-LOOP: this unit's volume is the EVO Sabre DAC's own (Volumio
-mixer_type=None) and the remote drives the DAC directly, so Sable does not change
-volume -- it just flashes a VOLUME +/- (or MUTE) overlay as feedback.
+MODE-AWARE: the same button does the natural thing for the current screen. On a
+now-playing/clock screen SELECT opens the menu, PLAY/PAUSE toggles, LEFT/RIGHT skip
+tracks; in a menu/browse list SELECT/RIGHT select an item, LEFT goes back, UP/DOWN
+scroll, PLAY/PAUSE still toggles playback.
+
+Volume/mute are OPEN-LOOP: the EVO Sabre DAC owns volume (Volumio mixer_type=None)
+and the remote drives the DAC directly, so Sable does NOT change volume -- it just
+flashes a VOLUME +/- (or MUTE) overlay as feedback.
 """
 import os
 import socket
@@ -29,40 +37,33 @@ _REPEATABLE = ("scroll", "volume")
 
 def command_for(key, mode):
     """Map an IR KEY_* name to (command, arg) for the current screen `mode`.
-    Returns None for keys we ignore."""
-    nowplaying = mode in _NOWPLAYING
+    Returns None for keys we ignore. See the module docstring for the physical
+    button -> KEY_* mapping (SELECT=KEY_MENU, PLAY/PAUSE=KEY_OK on this remote)."""
     in_list = mode in ("menu", "browse")
-    if key in ("KEY_OK", "KEY_ENTER"):
-        return ("toggle", None) if nowplaying else ("select", None)
-    if key == "KEY_RIGHT":
-        return ("next", None) if nowplaying else ("select", None)
+    # SELECT button (KEY_MENU): open the menu from now-playing; select in a list.
+    if key == "KEY_MENU":
+        return ("select", None) if in_list else ("menu", None)
+    # PLAY/PAUSE bar (KEY_OK): always play/pause.
+    if key in ("KEY_OK", "KEY_ENTER", "KEY_PLAY", "KEY_PAUSE", "KEY_PLAYPAUSE"):
+        return ("toggle", None)
+    # D-pad LEFT/RIGHT: skip tracks on now-playing; navigate in a list.
     if key == "KEY_LEFT":
-        return ("previous", None) if nowplaying else ("back", None)
+        return ("back", None) if in_list else ("previous", None)
+    if key == "KEY_RIGHT":
+        return ("select", None) if in_list else ("next", None)
+    # D-pad UP/DOWN: scroll lists (no-op on now-playing).
     if key == "KEY_UP":
-        return ("scroll", -1)            # lists scroll; now-playing ignores it
+        return ("scroll", -1)
     if key == "KEY_DOWN":
         return ("scroll", 1)
-    if key == "KEY_MENU":
-        return ("home", None) if in_list else ("menu", None)
-    if key in ("KEY_BACK", "KEY_EXIT", "KEY_RETURN"):
-        return ("back", None)
-    if key == "KEY_HOME":
-        return ("home", None)
-    if key == "KEY_NEXT":
-        return ("next", None)
-    if key == "KEY_PREVIOUS":
-        return ("previous", None)
-    if key in ("KEY_PLAY", "KEY_PAUSE", "KEY_PLAYPAUSE"):
-        return ("toggle", None)
-    if key == "KEY_INPUT":
-        return ("dac_input", None)
+    # DAC buttons that still reach the Pi -> open-loop on-screen indicator only.
     if key == "KEY_VOLUMEUP":
         return ("volume", "+")
     if key == "KEY_VOLUMEDOWN":
         return ("volume", "-")
     if key == "KEY_MUTE":
         return ("mute", None)
-    # KEY_POWER deliberately unmapped (avoid accidental shutdown).
+    # KEY_INPUT / KEY_POWER: DAC-only on this unit -> ignored.
     return None
 
 

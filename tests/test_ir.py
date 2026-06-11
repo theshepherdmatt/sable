@@ -13,29 +13,32 @@ from sable.inputs.ir import command_for
 from sable.app import build_sim_app
 
 
-def test_nowplaying_keys_are_transport():
+def test_nowplaying_buttons():
+    # On this remote: SELECT=KEY_MENU (open menu), PLAY/PAUSE=KEY_OK (toggle),
+    # LEFT/RIGHT skip tracks.
+    assert command_for("KEY_MENU", "modern") == ("menu", None)
     assert command_for("KEY_OK", "modern") == ("toggle", None)
     assert command_for("KEY_OK", "clock") == ("toggle", None)
     assert command_for("KEY_LEFT", "modern") == ("previous", None)
     assert command_for("KEY_RIGHT", "spectrum") == ("next", None)
-    assert command_for("KEY_MENU", "modern") == ("menu", None)
 
 
-def test_menu_keys_navigate():
-    assert command_for("KEY_OK", "menu") == ("select", None)
+def test_menu_buttons():
+    # SELECT (KEY_MENU) and RIGHT select; LEFT backs out; UP/DOWN scroll;
+    # PLAY/PAUSE (KEY_OK) still toggles playback.
+    assert command_for("KEY_MENU", "menu") == ("select", None)
     assert command_for("KEY_RIGHT", "menu") == ("select", None)
     assert command_for("KEY_LEFT", "menu") == ("back", None)
     assert command_for("KEY_UP", "menu") == ("scroll", -1)
     assert command_for("KEY_DOWN", "browse") == ("scroll", 1)
-    assert command_for("KEY_MENU", "menu") == ("home", None)
+    assert command_for("KEY_OK", "menu") == ("toggle", None)
 
 
-def test_volume_transport_and_unmapped():
+def test_dac_buttons_open_loop_or_ignored():
     assert command_for("KEY_VOLUMEUP", "modern") == ("volume", "+")
     assert command_for("KEY_VOLUMEDOWN", "menu") == ("volume", "-")
     assert command_for("KEY_MUTE", "modern") == ("mute", None)
-    assert command_for("KEY_NEXT", "menu") == ("next", None)
-    assert command_for("KEY_INPUT", "modern") == ("dac_input", None)
+    assert command_for("KEY_INPUT", "modern") is None          # DAC-only -> ignored
     assert command_for("KEY_POWER", "modern") is None          # never shuts down
     assert command_for("KEY_WHATEVER", "modern") is None
 
