@@ -25,6 +25,9 @@ LED_SHUFF = 1 << 4
 LED_REPEAT = 1 << 5
 LED_SPARE = 1 << 6
 
+# Boot "power on" sweep order across all seven LEDs.
+LED_SWEEP = [LED_PLAY, LED_PAUSE, LED_PREV, LED_NEXT, LED_SHUFF, LED_REPEAT, LED_SPARE]
+
 # Panel button id -> (Sable command or None, feedback LED). Button 8 (power) is
 # hardware-only and never appears here.
 _BUTTON_ACTION = {
@@ -51,7 +54,6 @@ class ButtonsLeds:
         self._bus = None
         self._running = False
         self._lock = threading.Lock()   # serializes ALL MCP bus access
-        self._status_led = 0             # play/pause LED from state
         self._ephemeral_led = 0          # transient button-press feedback
         self._hw_led = -1                # last byte written to GPIOA
         self._timer = None
@@ -73,8 +75,7 @@ class ButtonsLeds:
             return
         self._running = True
         threading.Thread(target=self._scan_loop, daemon=True, name="sable-buttons").start()
-        self.store.subscribe(self._on_state)
-        self._apply_status(self.store.get().status)
+        threading.Thread(target=self._led_loop, daemon=True, name="sable-leds").start()
         self.log("buttons+LEDs started (MCP 0x%02x on i2c-%d)." % (self.mcp.addr, self.mcp.bus))
 
     def stop(self):
@@ -146,18 +147,35 @@ class ButtonsLeds:
         if led:
             self._flash(led)
 
-    # --- LEDs (one lit at a time; ephemeral feedback overrides status) ---
-    def _on_state(self, old, new):
-        if old.status != new.status:
-            self._apply_status(new.status)
-
-    def _apply_status(self, status):
-        led = LED_PLAY if status == "play" else (
-            LED_PAUSE if status in ("pause", "stop") else 0)
-        with self._lock:
-            self._status_led = led
-            if self._ephemeral_led == 0:
+    # --- LEDs: an animation ticker owns GPIOA -----------------------------------
+    # A boot sweep on start (a "powering up" flourish matching the OLED boot),
+    # then a steady loop polling the live status: play = play LED solid, pause = a
+    # gentle on/off heartbeat (the MCP is digital-only -- no PWM -- so a pulse, not
+    # a brightness breath), stopped/idle = all dark. A button press still flashes
+    # its own LED for feedback, overriding the ticker for feedback_s.
+    def _led_loop(self):
+        for led in LED_SWEEP:                       # boot "power on" sweep
+            if not self._running:
+                return
+            with self._lock:
                 self._write_leds_locked(led)
+            time.sleep(0.055)
+        with self._lock:
+            self._write_leds_locked(0)
+        while self._running:
+            with self._lock:
+                if self._ephemeral_led == 0:
+                    self._write_leds_locked(self._desired_led())
+            time.sleep(0.08)
+
+    def _desired_led(self, now=None):
+        now = time.monotonic() if now is None else now
+        status = self.store.get().status
+        if status == "play":
+            return LED_PLAY
+        if status == "pause":
+            return LED_PAUSE if (now % 1.4) < 1.0 else 0    # mostly-on heartbeat
+        return 0                                            # stopped/idle: dark
 
     def _flash(self, led):
         if self._timer:
@@ -172,7 +190,7 @@ class ButtonsLeds:
     def _unflash(self):
         with self._lock:
             self._ephemeral_led = 0
-            self._write_leds_locked(self._status_led)
+            self._write_leds_locked(self._desired_led())
 
     def _write_leds_locked(self, value):
         """Write GPIOA only on change. Caller MUST hold self._lock."""
