@@ -154,7 +154,7 @@ class ModernScreen(Screen):
         halfw = max(1, (x1 - x0) // 2)
         px = canvas.load()
         for i, lvl in enumerate((lo, hi)):
-            by = 55 + i * 5                                # two 2px bars, y55 + y60
+            by = 49 + i * 5                                # two 2px bars, y49 + y54
             draw.line((x0, by, x1, by), fill=32)          # dim full-width track
             draw.line((x0, by + 1, x1, by + 1), fill=20)
             ext = int(halfw * max(0.0, min(1.0, lvl)))
@@ -166,21 +166,22 @@ class ModernScreen(Screen):
                 px[cx + dx, by + 1] = max(60, g - 50)
 
     def _render_progress(self, canvas, draw, tx, w, h, st):
-        py = 52
-        right = w - 30
-        draw.line((tx, py, right, py), fill=55)
-        frac = self.app.store.progress_fraction()
-        fillw = int((right - tx) * frac)
-        if fillw > 0:
-            draw.line((tx, py, tx + fillw, py), fill=255)
-            draw.line((tx, py + 1, tx + fillw, py + 1), fill=255)
+        # A QUIET position line along the very bottom edge -- the panel's "floor",
+        # not a third competing bar above the level meters. Remaining time sits to
+        # its right.
         f = self.app.fonts.get("sans", 8)
         if st.duration_s > 0:
-            rem = st.duration_s - self.app.store.live_position_ms() / 1000.0
-            label = "-" + _mmss(rem)
+            label = "-" + _mmss(st.duration_s - self.app.store.live_position_ms() / 1000.0)
         else:
             label = _mmss(self.app.store.live_position_ms() / 1000.0)
-        self.text(canvas, (w - 1, py - 4), label, f, fill=145, anchor="ra")
+        tw = self.text_width(draw, label, f)
+        self.text(canvas, (w - 2, h - 9), label, f, fill=130, anchor="ra")
+        py = h - 1
+        right = w - tw - 6
+        draw.line((tx, py, right, py), fill=24)
+        fillw = int(max(0, right - tx) * self.app.store.progress_fraction())
+        if fillw > 0:
+            draw.line((tx, py, tx + fillw, py), fill=130)
 
     def _render_paused(self, canvas, draw, tx, w, h, st):
         py = 39
