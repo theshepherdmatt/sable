@@ -158,6 +158,20 @@ class VolumioListener:
         except Exception:
             pass
 
+    def play_all(self, items):
+        """Play a whole album/list: replace the queue with the first leaf, then
+        append the rest. `items` are Volumio browse leaves ({uri, service, type,
+        title}). Mirrors quadify's Play-Album (replaceAndPlay + addToQueue)."""
+        items = [it for it in (items or []) if it.get("uri")]
+        if not items:
+            return
+        try:
+            self.sio.emit("replaceAndPlay", items[0])
+            for it in items[1:]:
+                self.sio.emit("addToQueue", it)
+        except Exception:
+            pass
+
     def force_reconnect(self):
         """Test hook: drop our OWN connection to exercise the reconnect path."""
         self.log("volumio: forcing self-disconnect (reconnect test)")

@@ -31,6 +31,13 @@ def _is_folder(item):
     return t.endswith("category") or t in _FOLDER_TYPES
 
 
+def _playables(items):
+    """The playable leaves (songs/tracks) in a list -- not folders, not the
+    synthetic Play-all row, and with a uri to play."""
+    return [it for it in items
+            if not it.get("_play_all") and not _is_folder(it) and it.get("uri")]
+
+
 def _items_from_response(data):
     """Flatten navigation.lists[].items[] into one list; return (items, prev_uri)."""
     nav = (data or {}).get("navigation", {}) if isinstance(data, dict) else {}
@@ -98,7 +105,12 @@ class BrowseScreen(Screen):
         if not f["items"]:
             return
         item = f["items"][f["index"]]
-        if _is_folder(item):
+        if item.get("_play_all"):
+            songs = _playables(f["items"])
+            if songs and self.app.listener is not None:
+                self.app.listener.play_all(songs)
+            self.app.go(self.app.nowplaying_screen())
+        elif _is_folder(item):
             if self.app.listener is None:
                 return
             self._pending_title = item.get("title") or "..."
@@ -121,6 +133,8 @@ class BrowseScreen(Screen):
         if not self.loading:
             return
         items, _prev = _items_from_response(data)
+        if len(_playables(items)) >= 2:           # an album/list -> offer Play all
+            items = [{"title": "Play all", "_play_all": True}] + items
         frame = self._frame(getattr(self, "_pending_title", "..."), items)
         if self._replace_top:
             self.stack[-1] = frame       # carousel entry: result becomes the root
