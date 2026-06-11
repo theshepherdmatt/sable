@@ -1,12 +1,16 @@
-#!/bin/bash
+#!/bin/sh
 # Sable plugin install -- run as root by Volumio's plugin manager.
+#
+# IMPORTANT: Volumio executes this with `sh` (dash), so it MUST be POSIX -- no
+# `set -o pipefail`, no bash-isms. The heavy app installer it calls below is run
+# explicitly with `bash`, so that one may keep its bash features.
 #
 # This is the WHOLE Sable install. It deploys the bundled app (sableapp/, assembled
 # by tools/build-plugin.sh) to /home/volumio/sable, then runs the app's own proven
 # installer (the quadify-recipe: apt build deps + system pip, kernel overlays, MPD
 # spectrum fifo, LIRC, the systemd service). Node deps come from package.json via
 # the plugin manager. Settings/wiring files already on disk are preserved.
-set -uo pipefail
+set -u
 
 PLUGIN_DIR="$(cd "$(dirname "$0")" && pwd)"
 APP_SRC="$PLUGIN_DIR/sableapp"
