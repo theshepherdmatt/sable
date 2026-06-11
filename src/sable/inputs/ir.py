@@ -5,8 +5,9 @@ Runs in-process on hardware (like the rotary). Replaces quadify's ir_listener.py
 lircd broadcasts each key to every connected client, so this coexists with any
 other listener without stealing events.
 
-PHYSICAL REMOTE (Audiophonics EVO Sabre / "ApEvo") -- verified with irw. Only six
-buttons are usable for the UI; the rest drive the DAC directly:
+BUNDLED REMOTE PROFILE ("ApEvo" -- an Audiophonics EVO Sabre remote, verified with
+irw). Swap config/lirc/lircd.conf for your own remote (keep the KEY_* names). This
+profile maps six buttons to the UI; the rest drive that DAC directly:
     SELECT button      -> KEY_MENU   (NOT KEY_OK!)
     PLAY/PAUSE bar      -> KEY_OK
     D-pad UP/DOWN/LEFT/RIGHT -> KEY_UP/DOWN/LEFT/RIGHT
@@ -18,7 +19,7 @@ now-playing/clock screen SELECT opens the menu, PLAY/PAUSE toggles, LEFT/RIGHT s
 tracks; in a menu/browse list SELECT/RIGHT select an item, LEFT goes back, UP/DOWN
 scroll, PLAY/PAUSE still toggles playback.
 
-Volume/mute are OPEN-LOOP: the EVO Sabre DAC owns volume (Volumio mixer_type=None)
+Volume/mute are OPEN-LOOP: the DAC owns volume (Volumio mixer_type=None)
 and the remote drives the DAC directly, so Sable does NOT change volume -- it just
 flashes a VOLUME +/- (or MUTE) overlay as feedback.
 """

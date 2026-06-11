@@ -1,10 +1,8 @@
 # Sable -- Design Proposal (Phase 0)
 
-Sable is a ground-up successor to Quadify-Evo: a front-panel controller for the
-Audiophonics EVO Sabre (dual ES9038Q2M, presented as a USB-XMOS audio device)
-mounted in a Quad FM4 case, running on Volumio 4 / Bookworm / RPi4. Same hardware
-contract, cleaner software. The name nods to the **Sab**re DAC and is short and
-ASCII-clean.
+Sable is a ground-up successor to Quadify: a front-panel display + controller
+(SSD1322 OLED + rotary + buttons/LEDs + IR) for Volumio 4 / Bookworm on a Raspberry
+Pi 4. Volumio stays the player; Sable owns the display + controls.
 
 ## Why a rebuild (what we are fixing)
 The old code worked but fought itself: a ~1100-line `ModeManager` god object, the
@@ -103,7 +101,7 @@ write-only/desync behaviour.
 9. CAVA pipeline MPD->/tmp/cava.fifo->CAVA->/tmp/display.fifo (screens next pass).
 10. Install strategy: no venv, `--break-system-packages`, dpkg self-heal,
     NodeSource-repo removal before apt update (install script next pass).
-11. Volumio Bookworm `package.json` schema (`node/package.json`).
+11. Volumio Bookworm `package.json` schema (`plugin/package.json`).
 
 ## Dropped (not ported)
 System Update/Rollback menu; duplicate screensaver menu; all `.bak`/`__pycache__`

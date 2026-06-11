@@ -1,5 +1,6 @@
 #!/bin/bash
-# Sable installer for Volumio 4 (Raspberry Pi + Audiophonics EVO Sabre, Quad case).
+# Sable installer for Volumio 4 (Raspberry Pi). SSD1322 OLED + rotary + buttons/
+# LEDs (MCP23017) + optional IR remote.
 #
 # Mirrors the dependency recipe proven by the quadify plugin on this exact platform
 # (32-bit ARM / Bookworm): apt the build toolchain + PREBUILT python3-* C-extension
@@ -63,9 +64,10 @@ else
 fi
 
 # 3. Kernel overlays (written now; take effect on the next REBOOT) -----------
-# SPI (OLED), I2C (buttons/LEDs), gpio-ir (IR BCM4). gpio-shutdown wires the EVO
-# Sabre power button on BCM17 -- remove that line if your board powers off/won't
-# stay up. The EVO Sabre DAC is USB: NO I2S/HAT overlay here.
+# SPI (OLED), I2C (buttons/LEDs), gpio-ir (IR BCM4). gpio-shutdown wires a safe
+# power-off button on BCM17 -- remove that line if your board has nothing on BCM17
+# and powers off / won't stay up. Audio (USB/HAT/HDMI) is Volumio's concern -- no
+# audio overlay here.
 add_overlay() {
     local line="$1"
     $SUDO touch "$USERCONFIG" 2>/dev/null || true

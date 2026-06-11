@@ -25,10 +25,9 @@ class OledPins:
     blank: int = 25              # BCM, pulled low ~1s on stop to force panel dark
     width: int = 256
     height: int = 64
-    rotate: int = 0              # luma rotate (x90). This unit (Evo panel in a
-                                 # Quad case) reads right-side-up at 0 -- CONFIRMED
-                                 # on the real OLED 2026-06-10. (config.yaml's
-                                 # conflicting rotate:180 was a desynced stray.)
+    rotate: int = 0              # luma rotate (x90); 0 = right-side-up. If your
+                                 # panel is mounted rotated, override in
+                                 # config/hardware.json: "oled": {"rotate": 180}.
 
 
 @dataclass(frozen=True)
@@ -99,7 +98,8 @@ MCP = _build(Mcp23017, "mcp", _OVERRIDES)
 #   dtparam=i2c_arm=on
 #   dtoverlay=gpio-ir,gpio_pin=4
 #   dtoverlay=gpio-shutdown,gpio_pin=17,active_low=1,gpio_pull=up
-# The EVO Sabre DAC is USB-XMOS audio-class; NO I2S/HAT overlay belongs here.
+# Audio output (USB DAC / I2S HAT / HDMI) is Volumio's concern -- Sable adds no
+# audio overlay here.
 IR_GPIO = 4
 POWER_BUTTON_GPIO = 17           # handled by gpio-shutdown overlay, never in software
 
@@ -112,7 +112,7 @@ LED_SHUFFLE = 4
 LED_REPEAT = 5
 LED_SPARE = 6
 
-# DAC input labels mirrored from the EVO Sabre remote selector.
-# The Pi cannot read or set the DAC input; the remote is the only control.
-# Order MUST match the order the DAC cycles through on each INPUT press.
+# DAC input labels, for DACs whose own remote cycles a hardware input selector
+# (e.g. the Audiophonics EVO Sabre). The Pi cannot read or set the input; this is a
+# display HINT only. Order MUST match the order the DAC cycles on each INPUT press.
 DAC_INPUTS = ("USB", "RPI", "COAX", "OPT", "BT")

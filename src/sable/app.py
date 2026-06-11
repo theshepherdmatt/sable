@@ -386,7 +386,7 @@ class App:
     # --- transient OSD overlay (volume / mute / DAC-input hints) -------------
     def show_osd(self, big, small="", duration=1.4):
         """Flash a centred overlay for `duration`s over whatever is on screen.
-        Used for OPEN-LOOP hints: the EVO Sabre DAC handles volume/mute itself
+        Used for OPEN-LOOP hints: the DAC handles volume/mute itself
         (Volumio mixer_type=None) and the DAC input is remote-only, so Sable just
         shows the change as feedback -- it does not drive it."""
         self._osd = (big, small, time.monotonic() + duration)

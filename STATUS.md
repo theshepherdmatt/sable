@@ -6,9 +6,9 @@ at `/home/volumio/sable` (source of truth) and is mirrored at
 `C:\Users\Matt\sable-stage` on the PC.
 
 ## What Sable is
-Ground-up successor to the Quadify-Evo plugin: the front-panel controller (OLED +
-rotary + IR + buttons/LEDs + spectrum) for the Audiophonics EVO Sabre (USB-XMOS
-DAC) in a Quad case, on RPi4 / Volumio / Bookworm. Volumio is the player; Sable is
+Ground-up successor to the Quadify plugin: the front-panel controller (OLED +
+rotary + IR + buttons/LEDs + spectrum) for Volumio on RPi4 / Bookworm. Volumio is
+the player; Sable is
 the display/control layer. Built ALONGSIDE the still-installed `quadify` plugin,
 whose conflicting services are retired but whose `cava` binary + LIRC config are
 still used.
@@ -85,14 +85,14 @@ prompt). Install files into root dirs via `sudo tee < src > /dev/null` or
 - `~/sable` is a **local git repo** (branch `main`, initial commit `42b6d09`, 61
   files, cruft-free). `config/settings.json` is gitignored; `config/settings.default.json`
   is committed (app falls back to in-code DEFAULTS when the live file is absent).
-  Pushed to **github.com/theshepherdmatt/sable** (remote `origin`, branch `main`).
+  **NOT pushed to GitHub yet** -- Stage 2 awaits Matt readying the remote + Pi auth.
 - MCP23017 hardware fault (the old `[Errno 5]` at 0x20) was **fixed by the user**
   (rewiring) 2026-06-10; buttons + LEDs work.
 
 ## Deferred / TODO
-1. **Version control** -- DONE. Local git + pushed to GitHub
-   (github.com/theshepherdmatt/sable, branch `main`). Remaining: re-point
-   `sable-stage` to a clone so Pi/GitHub/PC stay in sync (Pi = source of truth).
+1. **Version control** -- DONE locally (commit `42b6d09`). Stage 2 = push to
+   GitHub once Matt creates the repo + gives the Pi write auth, then re-point
+   `sable-stage` to clone from it (Pi = source of truth, GitHub = backup).
 2. **All-source spectrum** -- only MPD-routed audio feeds bars; Spotify/AirPlay/
    rp2 bypass MPD. `snd-aloop` is NOT on this kernel; an ALSA `type file` tee
    risks stalling audio. Needs bench care. (rp2 also was flaky on Evo -- don't test with it.)
