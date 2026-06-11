@@ -1,9 +1,14 @@
-"""Sable hardware contract -- FROZEN for this board (RPi4 + EVO Sabre in a Quad case).
+"""Sable hardware contract.
 
-These are NOT user settings. They describe physical wiring and must never be
-exposed as editable config. User preferences live in settings.py instead.
-Splitting the two is a deliberate break from the old config.yaml, which mixed
-immutable pin numbers with user prefs and drifted across four stores.
+DEFAULTS are the standard Quadify wiring (RPi4; the official pinout -- OLED
+DC=GPIO24, RST=GPIO25, which are also luma's defaults). A board wired differently
+-- notably the original EVO Sabre unit (OLED DC=27, RST=24) -- overrides only the
+pins it changes via config/hardware.json (see config/hardware.example.json).
+
+These are NOT user settings: they describe physical wiring and are never exposed as
+editable config. User preferences live in settings.py instead -- a deliberate break
+from the old config.yaml, which mixed immutable pin numbers with user prefs and
+drifted across four stores.
 """
 import dataclasses
 import json
@@ -14,9 +19,9 @@ from dataclasses import dataclass
 @dataclass(frozen=True)
 class OledPins:
     spi_port: int = 0
-    spi_device: int = 0          # /dev/spidev0.0
-    rst: int = 24                # BCM, luma drives this at runtime
-    dc: int = 27                 # BCM
+    spi_device: int = 0          # /dev/spidev0.0 (CS on CE0 / GPIO8)
+    rst: int = 25                # BCM, luma drives this (standard pinout; EVO=24)
+    dc: int = 24                 # BCM (standard pinout; EVO unit overrides to 27)
     blank: int = 25              # BCM, pulled low ~1s on stop to force panel dark
     width: int = 256
     height: int = 64
@@ -56,10 +61,10 @@ class Contrast:
     high: int = 255
 
 
-# Per-MACHINE wiring overrides. The dataclasses above are the frozen DEFAULTS (the
-# original EVO Sabre unit). A board wired differently drops a config/hardware.json
-# next to settings.json with only the pins it changes, e.g.:
-#   {"oled": {"dc": 24, "rst": 25, "blank": 25}}
+# Per-MACHINE wiring overrides. The dataclasses above are the DEFAULTS (standard
+# Quadify wiring). A board wired differently drops a config/hardware.json next to
+# settings.json with only the pins it changes -- e.g. the original EVO Sabre unit:
+#   {"oled": {"dc": 27, "rst": 24}}
 # This is NOT a user setting (never exposed in the menu/plugin) -- it describes
 # physical wiring. Absent file or keys -> the defaults below. gitignored, like
 # settings.json (one per machine); see config/hardware.example.json.
