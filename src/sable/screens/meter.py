@@ -47,8 +47,12 @@ class MeterScreen(Screen):
         self._right_vu = 0.0
         self._vu_attack = 0.8
         self._vu_release = 0.15
-        self._vu_len = 30
-        self._vu_centres = ((54, 68), (200, 68))   # pivots (off the bottom edge)
+        # Geometry matched to assets/vuscreen.png (twin arcs, scale -20..+6). The
+        # pivot sits below the panel; the needle sweeps +/- _vu_swing degrees from
+        # vertical to track the printed arc.
+        self._vu_len = 72
+        self._vu_swing = 46                        # degrees each side of vertical
+        self._vu_centres = ((67, 88), (191, 88))   # L/R pivots (off the bottom edge)
         self._dial = None                          # cached dial face | False
 
     def feed(self, bars):
@@ -193,9 +197,10 @@ class MeterScreen(Screen):
         return self._dial if self._dial is not False else None
 
     def _vu_needle(self, draw, cx, cy, level):
-        # level 0..1 -> -70..+70 deg; -90 puts 0-level at upper-left, full at
-        # upper-right (classic VU swing). Pivot sits just below the panel.
-        ang = math.radians((-70.0 + max(0.0, min(1.0, level)) * 140.0) - 90.0)
+        # level 0..1 -> -swing..+swing deg; -90 puts 0-level at upper-left, full at
+        # upper-right (classic VU swing). Pivot sits below the panel.
+        s = self._vu_swing
+        ang = math.radians((-s + max(0.0, min(1.0, level)) * 2 * s) - 90.0)
         x = cx + self._vu_len * math.cos(ang)
         y = cy + self._vu_len * math.sin(ang)
         draw.line((cx, cy, x, y), fill=255, width=2)
