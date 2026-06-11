@@ -25,7 +25,9 @@ class SimDisplay(Display):
 
     def present(self, image):
         self.n += 1
-        gray = image.convert("L")
+        # Quantise to the panel's true 16 grey levels so a saved PNG / ASCII
+        # preview never looks smoother than the real SSD1322 (which is 4-bit).
+        gray = image.convert("L").point(lambda p: (p >> 4) << 4)
         if self.frames_dir:
             gray.save(os.path.join(self.frames_dir, "%03d.png" % self.n))
         if self.ascii_preview:

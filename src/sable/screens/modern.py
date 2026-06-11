@@ -51,10 +51,10 @@ class ModernScreen(Screen):
         else:
             mx = tx
         meta = "  ".join(x for x in (st.samplerate, st.bitdepth) if x)
-        draw.text((mx, iy + 1), meta, font=meta_f, fill=255)
+        self.text(canvas, (mx, iy + 1), meta, meta_f, fill=255)
         vol = "Vol %d" % st.volume
         vw = self.text_width(draw, vol, meta_f)
-        draw.text((w - vw - 2, iy + 1), vol, font=meta_f, fill=255)
+        self.text(canvas, (w - vw - 2, iy + 1), vol, meta_f, fill=255)
 
         # --- progress bar (live position) ---
         py = h - 6

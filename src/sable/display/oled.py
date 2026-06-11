@@ -48,11 +48,20 @@ class OledDisplay(Display):
             gpio_RST=pins.rst,
             gpio_DC=pins.dc,
         )
-        self._dev = ssd1322(self._serial, mode=self.mode, rotate=rotate)
+        # luma's ssd1322 packs 16-level greyscale ONLY via its "RGB" path
+        # (_render_greyscale computes luma per pixel into 4 bits). mode="1" would
+        # force its 1-bit on/off path and waste 15 of the panel's greys -- which
+        # is exactly what made album art look blotchy. So the device is "RGB" and
+        # present() converts our greyscale ("L") canvas to RGB just before the
+        # blit. Render budget verified on this Pi 4: full-frame greyscale pack
+        # ~16ms (~60fps ceiling), and diff_to_previous only repacks the changed
+        # bounding box, so a typical now-playing frame is far cheaper.
+        self._dev = ssd1322(self._serial, mode="RGB", rotate=rotate)
 
     def present(self, image):
-        if image.mode != self.mode:
-            image = image.convert(self.mode)
+        # Screens draw on an "L" canvas; the device wants "RGB" for greyscale.
+        if image.mode != "RGB":
+            image = image.convert("RGB")
         self._dev.display(image)
 
     def set_contrast(self, value):

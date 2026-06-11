@@ -18,8 +18,8 @@ class ClockScreen(Screen):
         text = time.strftime("%H:%M:%S" if show_sec else "%H:%M", now)
         face = self.app.fonts.get("sans_bold", 32 if show_sec else 40)
         y = h // 2 - 8 if show_date else h // 2
-        draw.text((w // 2, y), text, font=face, fill=255, anchor="mm")
+        self.text(canvas, (w // 2, y), text, face, fill=255, anchor="mm")
         if show_date:
             date = time.strftime("%a %d %b", now)
-            draw.text((w // 2, h - 10), date,
-                      font=self.app.fonts.get("sans", 12), fill=255, anchor="mm")
+            self.text(canvas, (w // 2, h - 10), date,
+                      self.app.fonts.get("sans", 12), fill=255, anchor="mm")

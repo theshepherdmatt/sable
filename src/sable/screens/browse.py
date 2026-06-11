@@ -109,14 +109,14 @@ class BrowseScreen(Screen):
     # --- render ---
     def render(self, canvas, draw, w, h):
         f = self._cur
-        draw.text((4, 1), f["title"], font=self.app.fonts.get("sans_bold", 12), fill=255)
+        self.text(canvas, (4, 1), f["title"], self.app.fonts.get("sans_bold", 12), fill=255)
         item_font = self.app.fonts.get("sans", 12)
         if self.loading:
-            draw.text((6, self.TOP + self.ROW_H), "Loading...", font=item_font, fill=255)
+            self.text(canvas, (6, self.TOP + self.ROW_H), "Loading...", item_font, fill=255)
             return
         items, index = f["items"], f["index"]
         if not items:
-            draw.text((6, self.TOP + self.ROW_H), "(empty)", font=item_font, fill=255)
+            self.text(canvas, (6, self.TOP + self.ROW_H), "(empty)", item_font, fill=255)
             return
         start = max(0, min(index - 1, len(items) - self.ROWS))
         for i in range(start, min(start + self.ROWS, len(items))):

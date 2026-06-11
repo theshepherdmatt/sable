@@ -11,6 +11,6 @@ class SplashScreen(Screen):
 
     def render(self, canvas, draw, w, h):
         title = self.app.fonts.get("sans_bold", 28)
-        draw.text((w // 2, h // 2 - 8), "SABLE", font=title, fill=255, anchor="mm")
+        self.text(canvas, (w // 2, h // 2 - 8), "SABLE", title, fill=255, anchor="mm")
         sub = self.app.fonts.get("sans", 11)
-        draw.text((w // 2, h - 12), self.subtitle, font=sub, fill=255, anchor="mm")
+        self.text(canvas, (w // 2, h - 12), self.subtitle, sub, fill=255, anchor="mm")

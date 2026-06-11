@@ -64,7 +64,12 @@ class AlbumArtCache:
         try:
             req = urllib.request.Request(url, headers={"User-Agent": "sable"})
             data = urllib.request.urlopen(req, timeout=self.timeout).read()
-            img = Image.open(io.BytesIO(data)).convert("L").resize(self.size)
+            # LANCZOS downscale: covers are big (300-600px) shrinking to ~56px,
+            # so resampling quality is what makes the greyscale art look sharp
+            # rather than aliased. (The panel's own 16-level quantisation happens
+            # later in the display backend; we keep full "L" here.)
+            img = Image.open(io.BytesIO(data)).convert("L").resize(
+                self.size, Image.LANCZOS)
             with self._lock:
                 self._store(url, img)
             self.log("albumart: fetched", url)

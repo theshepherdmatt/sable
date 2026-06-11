@@ -115,7 +115,7 @@ class MenuScreen(Screen):
     def render(self, canvas, draw, w, h):
         f = self._cur
         items, index = f["items"], f["index"]
-        draw.text((4, 1), f["label"], font=self.app.fonts.get("sans_bold", 12), fill=255)
+        self.text(canvas, (4, 1), f["label"], self.app.fonts.get("sans_bold", 12), fill=255)
         item_font = self.app.fonts.get("sans", 12)
         start = max(0, min(index - 1, len(items) - self.ROWS))
         for i in range(start, min(start + self.ROWS, len(items))):
@@ -123,4 +123,4 @@ class MenuScreen(Screen):
             selected = i == index
             if selected:
                 draw.rectangle((0, y - 1, w - 1, y + self.ROW_H - 3), fill=255)
-            draw.text((6, y), items[i][0], font=item_font, fill=0 if selected else 255)
+            self.text(canvas, (6, y), items[i][0], item_font, fill=0 if selected else 255)

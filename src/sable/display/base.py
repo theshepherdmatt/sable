@@ -4,9 +4,14 @@ One interface, two backends: OledDisplay (real SSD1322 over SPI) and SimDisplay
 (renders to PNG + an inline ASCII preview, touches no hardware). The app depends
 only on this interface, so the same screens run on the bench and on the panel.
 
-Canvas mode is "1" (1-bit) for the slice -- crisp text for clock/menus. The real
-SSD1322 is 16-level grayscale; VU/spectrum screens can switch the canvas to "L"
-later without changing this interface.
+Canvas mode is "L" (8-bit greyscale): the SSD1322 is a native 16-level greyscale
+panel, so album art, gradients and fades get the full grey ramp. Text and bars
+stay razor-sharp because Screen.text()/draw_text_clipped() render glyph SHAPE
+through a 1-bit mask (no anti-aliasing) and paste a chosen grey through it -- so
+we keep type hierarchy without the soft AA halo a truetype draw on "L" would add.
+The panel only ever sees 16 distinct greys; OledDisplay maps "L" -> the device's
+"RGB" greyscale path (see oled.py), SimDisplay quantises previews to 16 levels so
+nothing on the bench looks better than the hardware can do.
 """
 from abc import ABC, abstractmethod
 
@@ -14,7 +19,7 @@ from PIL import Image
 
 
 class Display(ABC):
-    mode = "1"
+    mode = "L"
 
     def __init__(self, width, height):
         self.width = width
