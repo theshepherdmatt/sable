@@ -28,10 +28,14 @@ def test_unpack_two_and_three_tuples():
 def test_display_mode_label_reflects_settings():
     app = _app()
     m = app.fsm.screens["menu"]
-    app.settings._data.setdefault("display", {})["screen"] = "modern"
-    assert m._display_mode_label() == "Modern"
-    app.settings._data["display"]["screen"] = "spectrum"
-    app.settings._data["display"]["spectrum_style"] = "mirror"
+    d = app.settings._data.setdefault("display", {})
+    d["screen"] = "modern"
+    d["theme"] = "panel"
+    assert m._display_mode_label() == "Panel"
+    d["theme"] = "cinema"
+    assert m._display_mode_label() == "Cinema"
+    d["screen"] = "spectrum"
+    d["spectrum_style"] = "mirror"
     assert m._display_mode_label() == "Mirror"
 
 

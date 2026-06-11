@@ -15,10 +15,11 @@ from PIL import Image
 
 
 class AlbumArtCache:
-    def __init__(self, host="http://localhost:3000", size=(56, 56), timeout=5.0,
-                 maxsize=16, log=print):
+    def __init__(self, host="http://localhost:3000", size=(56, 56), mode="fit",
+                 timeout=5.0, maxsize=16, log=print):
         self.host = host.rstrip("/")
         self.size = size
+        self.mode = mode          # "fit" = resize to size; "cover" = fill + crop
         self.timeout = timeout
         self.maxsize = maxsize
         self.log = log
@@ -34,6 +35,22 @@ class AlbumArtCache:
         while len(self._order) > self.maxsize:
             old = self._order.pop(0)
             self._cache.pop(old, None)
+
+    def _process(self, img):
+        """LANCZOS resampling -- it is what makes the greyscale art look sharp
+        rather than aliased. "fit" resizes square art to the box; "cover" scales
+        to FILL the box then centre-crops (for the full-bleed Cinema theme, where
+        a square cover backs a 256x64 panel -- we show a cinematic slice of it).
+        The panel's 16-level quantisation happens later in the display backend."""
+        tw, th = self.size
+        if self.mode == "cover":
+            s = max(tw / img.width, th / img.height)
+            r = img.resize((max(1, int(img.width * s)), max(1, int(img.height * s))),
+                           Image.LANCZOS)
+            x = (r.width - tw) // 2
+            y = (r.height - th) // 2
+            return r.crop((x, y, x + tw, y + th))
+        return img.resize(self.size, Image.LANCZOS)
 
     def resolve_url(self, art):
         if not art:
@@ -64,12 +81,7 @@ class AlbumArtCache:
         try:
             req = urllib.request.Request(url, headers={"User-Agent": "sable"})
             data = urllib.request.urlopen(req, timeout=self.timeout).read()
-            # LANCZOS downscale: covers are big (300-600px) shrinking to ~56px,
-            # so resampling quality is what makes the greyscale art look sharp
-            # rather than aliased. (The panel's own 16-level quantisation happens
-            # later in the display backend; we keep full "L" here.)
-            img = Image.open(io.BytesIO(data)).convert("L").resize(
-                self.size, Image.LANCZOS)
+            img = self._process(Image.open(io.BytesIO(data)).convert("L"))
             with self._lock:
                 self._store(url, img)
             self.log("albumart: fetched", url)

@@ -28,7 +28,8 @@ class MenuScreen(Screen):
             ("Music", self._open_browse),
             ("Now Playing", self._now_playing),
             ("Display Mode", [
-                ("Modern", lambda: self._set_screen("modern")),
+                ("Modern: Panel", lambda: self._set_modern("panel")),
+                ("Modern: Cinema", lambda: self._set_modern("cinema")),
                 ("Spectrum Bars", lambda: self._set_spectrum("bars")),
                 ("Spectrum Dots", lambda: self._set_spectrum("dots")),
                 ("Spectrum Mirror", lambda: self._set_spectrum("mirror")),
@@ -47,7 +48,8 @@ class MenuScreen(Screen):
     def _display_mode_label(self):
         screen = self.app.settings.get("display", "screen", default="modern")
         if screen != "spectrum":
-            return "Modern"
+            return self.app.settings.get(
+                "display", "theme", default="panel").capitalize()
         return self.app.settings.get(
             "display", "spectrum_style", default="bars").capitalize()
 
@@ -107,8 +109,9 @@ class MenuScreen(Screen):
     def _now_playing(self):
         self.app.go(self.app.nowplaying_screen())
 
-    def _set_screen(self, name):
-        self.app.settings.set("display", "screen", name)
+    def _set_modern(self, theme):
+        self.app.settings.set("display", "screen", "modern")
+        self.app.settings.set("display", "theme", theme)
         self.app.go(self.app.nowplaying_screen())
 
     def _set_spectrum(self, style):

@@ -12,7 +12,8 @@ import threading
 DEFAULTS = {
     "display": {
         "screen": "modern",          # modern|spectrum
-        "spectrum_style": "bars",    # bars|dots (when screen == spectrum)
+        "theme": "panel",            # panel|cinema (when screen == modern)
+        "spectrum_style": "bars",    # bars|dots|mirror|ribbon (screen == spectrum)
         "spectrum": True,
         "rotate": 0,                 # luma quadrant 0..3
         "brightness": "high",        # low|medium|high -> hardware.CONTRAST

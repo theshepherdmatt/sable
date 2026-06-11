@@ -36,6 +36,7 @@ class ModernScreen(Screen):
         self._reader = None
         self._smoother = BarSmoother(self.FLOOR_BARS, attack=0.6, decay=0.12)
         self._test_floor = None     # injected for headless proof renders
+        self._scrim = None          # cached Cinema bottom-up darkening scrim
 
     def feed_floor(self, bars):
         self._test_floor = list(bars)
@@ -57,6 +58,13 @@ class ModernScreen(Screen):
     def render(self, canvas, draw, w, h):
         st = self.app.store.get()
         paused = st.status == "pause"
+        theme = self.app.settings.get("display", "theme", default="panel")
+        if theme == "cinema":
+            self._render_cinema(canvas, draw, w, h, st, paused)
+            return
+        self._render_panel(canvas, draw, w, h, st, paused)
+
+    def _render_panel(self, canvas, draw, w, h, st, paused):
         aw = self.ART
 
         # --- album art, full height, bleeding into the text field ---
@@ -176,3 +184,45 @@ class ModernScreen(Screen):
             fillw = int((right - tx) * self.app.store.progress_fraction())
             if fillw > 0:
                 draw.line((tx, pyb, tx + fillw, pyb), fill=115)
+
+    # --- Cinema theme: full-bleed art + bottom scrim + overlaid type ----------
+    def _get_scrim(self, w, h):
+        """Cached bottom-up darkening gradient (transparent at top, ~dark at the
+        bottom) so title/artist read over bright album art. Static -> built once."""
+        if self._scrim is not None and self._scrim.size == (w, h):
+            return self._scrim
+        scrim = Image.new("L", (w, h), 0)
+        px = scrim.load()
+        knee = h * 0.35
+        for y in range(h):
+            t = max(0.0, (y - knee) / max(1.0, h - knee))
+            v = int(215 * min(1.0, t))
+            for x in range(w):
+                px[x, y] = v
+        self._scrim = scrim
+        return scrim
+
+    def _render_cinema(self, canvas, draw, w, h, st, paused):
+        art = self.app.albumart_cinema.get(st.albumart)
+        if art is not None:
+            a = art.convert("L")
+            if paused:
+                a = a.point(lambda p: int(p * 0.55))
+            canvas.paste(a, (0, 0))
+            # darken the lower band so text reads (composite black through scrim)
+            canvas.paste(Image.composite(Image.new("L", (w, h), 0), canvas.copy(),
+                                         self._get_scrim(w, h)), (0, 0))
+        # title + artist over the lower third
+        self.draw_text_clipped(canvas, "cine_title", st.title or "(no title)",
+                               self.app.fonts.get("sans_bold", 16), 6, 28, w - 12,
+                               fill=140 if paused else 255)
+        self.draw_text_clipped(canvas, "cine_artist", st.artist or "",
+                               self.app.fonts.get("sans", 10), 6, 49, w - 12,
+                               fill=110 if paused else 205)
+        if paused:
+            draw.rectangle((6, 4, 9, 14), fill=185)
+            draw.rectangle((13, 4, 16, 14), fill=185)
+        # minimal progress hairline along the very bottom
+        fillw = int((w - 1) * self.app.store.progress_fraction())
+        if fillw > 0:
+            draw.line((0, h - 1, fillw, h - 1), fill=255)

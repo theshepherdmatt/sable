@@ -81,6 +81,9 @@ class App:
         self.fonts = Fonts()
         self.store = StateStore(log=log)
         self.albumart = AlbumArtCache(size=(ModernScreen.ART, ModernScreen.ART), log=log)
+        # Wide, cover-cropped art for the full-bleed Cinema theme.
+        self.albumart_cinema = AlbumArtCache(
+            size=(display.width, display.height), mode="cover", log=log)
         self.icons = IconCache(log=log)
         self.dry_run = dry_run
         self.log = log

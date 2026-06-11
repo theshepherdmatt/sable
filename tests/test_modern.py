@@ -96,6 +96,28 @@ def test_hero_renders_playing_and_paused_nonblank():
     assert list(play.getdata()) != list(paused.getdata())   # genuinely different
 
 
+def test_cinema_theme_renders_and_differs_from_panel():
+    """The Cinema theme renders a non-blank frame and is a genuinely different
+    layout from Panel for the same state."""
+    from sable.app import build_sim_app
+    app = build_sim_app(frames_dir=None)
+    app.display.ascii_preview = False
+    app.store.apply_pushstate({"status": "play", "title": "Wandering Star",
+                               "artist": "Portishead", "service": "mpd",
+                               "seek": 1000, "duration": 200})
+    app.go("modern")
+    m = app.fsm.screens["modern"]
+    app.settings._data.setdefault("display", {})["theme"] = "panel"
+    panel = Image.new("L", (256, 64), 0)
+    m.render(panel, ImageDraw.Draw(panel), 256, 64)
+    app.settings._data["display"]["theme"] = "cinema"
+    cinema = Image.new("L", (256, 64), 0)
+    m.render(cinema, ImageDraw.Draw(cinema), 256, 64)
+    assert panel.getbbox() is not None
+    assert cinema.getbbox() is not None
+    assert list(panel.getdata()) != list(cinema.getdata())
+
+
 def test_paused_never_resolves_to_spectrum():
     """A paused spectrum is flat bars (the old dead-blank panel). nowplaying must
     fall to the modern hero when paused even with an MPD source + spectrum style."""
