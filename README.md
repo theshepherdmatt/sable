@@ -52,18 +52,31 @@ SSH into the Pi (`ssh volumio@<your-pi>`, default password `volumio`).
 
 ### Option A -- as a Volumio plugin (recommended)
 
+Run these as **two separate steps** -- step 2 is interactive, so don't paste it on
+the same line as step 1.
+
+**1. Get the code and build the plugin payload:**
+
 ```bash
 git clone https://github.com/theshepherdmatt/sable.git /home/volumio/sable
 cd /home/volumio/sable
-bash tools/build-plugin.sh          # assembles the plugin payload
-cd plugin && volumio plugin install
+bash tools/build-plugin.sh
+```
+
+(If your board isn't the standard wiring, also create `config/hardware.json` now --
+see Hardware above.)
+
+**2. Install the plugin** (this prompts you to confirm -- answer **Yes**):
+
+```bash
+cd /home/volumio/sable/plugin
+volumio plugin install
 ```
 
 This installs **everything** (system deps, kernel overlays, the MPD spectrum fifo,
 the boot service) and registers **Sable** under *Settings -> Plugins -> Installed
-Plugins*, with its settings page. Reboot once if it added kernel overlays
-(SPI/I2C/IR). If your board isn't the standard wiring, create
-`config/hardware.json` first (see Hardware above).
+Plugins*, with its settings page. **Reboot once** afterwards if it added kernel
+overlays (SPI/I2C/IR).
 
 ### Option B -- manual / development
 
