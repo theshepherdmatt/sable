@@ -34,6 +34,7 @@ class MenuScreen(Screen):
                 ("Spectrum Dots", lambda: self._set_spectrum("dots")),
                 ("Spectrum Mirror", lambda: self._set_spectrum("mirror")),
                 ("Spectrum Ribbon", lambda: self._set_spectrum("ribbon")),
+                ("VU Meter", lambda: self._set_spectrum("vu")),
                 ("Back", _BACK),
             ], self._display_mode_label),
             ("Brightness", [
@@ -50,8 +51,8 @@ class MenuScreen(Screen):
         if screen != "spectrum":
             return self.app.settings.get(
                 "display", "theme", default="panel").capitalize()
-        return self.app.settings.get(
-            "display", "spectrum_style", default="bars").capitalize()
+        style = self.app.settings.get("display", "spectrum_style", default="bars")
+        return "VU" if style == "vu" else style.capitalize()
 
     @staticmethod
     def _unpack(item):

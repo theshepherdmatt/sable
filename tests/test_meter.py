@@ -61,7 +61,7 @@ def test_all_visualiser_styles_render_nonblank_and_differ():
     pattern = [0.1, 0.4, 0.7, 0.95, 0.6, 0.3] * 4
     meter.feed(pattern[:meter.bars])
     seen = {}
-    for style in ("bars", "dots", "mirror", "ribbon"):
+    for style in ("bars", "dots", "mirror", "ribbon", "vu"):
         meter.style = style
         meter.smoother.values = list(pattern[:meter.bars])   # skip attack ramp
         img = Image.new("L", (256, 64), 0)

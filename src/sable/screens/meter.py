@@ -11,12 +11,20 @@ reads like a hi-fi meter, not a status bar:
 
 Bars can be injected (feed()) for headless pure-render tests.
 """
+import math
+import os
+
 from PIL import Image, ImageDraw
 
 from .base import Screen
 from ..display.fifo_meter import DISPLAY_FIFO, FifoBars, BarSmoother
 
-_STYLES = ("bars", "dots", "mirror", "ribbon")
+_STYLES = ("bars", "dots", "mirror", "ribbon", "vu")
+
+# The analog VU dial face (carried over from Quadify's vuscreen -- already 256x64,
+# the same panel). The needle geometry below is matched to this artwork.
+_DIAL_PATH = os.path.normpath(
+    os.path.join(os.path.dirname(__file__), "..", "..", "..", "assets", "vuscreen.png"))
 
 
 class MeterScreen(Screen):
@@ -32,6 +40,16 @@ class MeterScreen(Screen):
         self.test_bars = None
         self._peaks = [0.0] * bars
         self._peak_decay = 0.02
+        # Analog VU style: twin needles with classic ballistics (fast attack, slow
+        # release) reading L/R from the two halves of the bar array. Geometry +
+        # 0.8/0.15 ballistics carried over from Quadify's proven vuscreen.
+        self._left_vu = 0.0
+        self._right_vu = 0.0
+        self._vu_attack = 0.8
+        self._vu_release = 0.15
+        self._vu_len = 30
+        self._vu_centres = ((54, 68), (200, 68))   # pivots (off the bottom edge)
+        self._dial = None                          # cached dial face | False
 
     def feed(self, bars):
         self.test_bars = list(bars)
@@ -81,6 +99,9 @@ class MeterScreen(Screen):
         vals = self.smoother.update(self._raw())
         peaks = self._update_peaks(vals)
 
+        if style == "vu":
+            self._render_vu(canvas, draw, w, h, st)
+            return
         self.draw_text_clipped(canvas, "sp_title", st.title or "(no title)",
                                self.app.fonts.get("sans", 10), 2, 0, w - 4, fill=160)
         if not vals:
@@ -157,3 +178,52 @@ class MeterScreen(Screen):
         if wash is not None:
             canvas.paste(wash, (0, top), mask.crop((0, top, w, h)))
         draw.line(pts, fill=255, width=1)                 # bright crest
+
+    # --- analog VU (twin needles over the dial face) --------------------------
+    def _get_dial(self, w, h):
+        if self._dial is None:
+            try:
+                img = Image.open(_DIAL_PATH).convert("L")
+                if img.size != (w, h):
+                    img = img.resize((w, h), Image.LANCZOS)
+                self._dial = img.point(lambda p: int(p * 0.6))   # dim so needles pop
+            except Exception as e:
+                self.app.log("meter: VU dial load failed:", e)
+                self._dial = False
+        return self._dial if self._dial is not False else None
+
+    def _vu_needle(self, draw, cx, cy, level):
+        # level 0..1 -> -70..+70 deg; -90 puts 0-level at upper-left, full at
+        # upper-right (classic VU swing). Pivot sits just below the panel.
+        ang = math.radians((-70.0 + max(0.0, min(1.0, level)) * 140.0) - 90.0)
+        x = cx + self._vu_len * math.cos(ang)
+        y = cy + self._vu_len * math.sin(ang)
+        draw.line((cx, cy, x, y), fill=255, width=2)
+
+    def _render_vu(self, canvas, draw, w, h, st):
+        dial = self._get_dial(w, h)
+        if dial is not None:
+            canvas.paste(dial, (0, 0))
+        raw = self._raw()
+        n = len(raw)
+        if n:
+            half = max(1, n // 2)
+            rl = sum(raw[:half]) / half
+            rr = sum(raw[half:]) / max(1, n - half)
+        else:
+            rl = rr = 0.0
+        # VU ballistics: fast attack, slow release (the needle swings, not twitches)
+        al = self._vu_attack if rl > self._left_vu else self._vu_release
+        ar = self._vu_attack if rr > self._right_vu else self._vu_release
+        self._left_vu = al * rl + (1 - al) * self._left_vu
+        self._right_vu = ar * rr + (1 - ar) * self._right_vu
+        (lx, ly), (rx, ry) = self._vu_centres
+        self._vu_needle(draw, lx, ly, self._left_vu)
+        self._vu_needle(draw, rx, ry, self._right_vu)
+        # my own touch: a dim track title in the empty band above the dials, and
+        # quiet L/R channel tags so the twin meters read as stereo.
+        self.draw_text_clipped(canvas, "vu_title", st.title or "",
+                               self.app.fonts.get("sans", 9), 4, 0, w - 8, fill=150)
+        ch = self.app.fonts.get("sans_bold", 8)
+        self.text(canvas, (lx - 2, h - 9), "L", ch, fill=120)
+        self.text(canvas, (rx - 2, h - 9), "R", ch, fill=120)

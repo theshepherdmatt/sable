@@ -19,6 +19,17 @@
           ]
         },
         {
+          "id": "theme",
+          "element": "select",
+          "label": "Modern theme",
+          "description": "Used when the now-playing screen is Modern.",
+          "value": { "value": "panel", "label": "Panel (art + info)" },
+          "options": [
+            { "value": "panel", "label": "Panel (art + info)" },
+            { "value": "cinema", "label": "Cinema (full-bleed art)" }
+          ]
+        },
+        {
           "id": "spectrum_style",
           "element": "select",
           "label": "Spectrum style",
@@ -28,7 +39,8 @@
             { "value": "bars", "label": "Bars" },
             { "value": "dots", "label": "Dots" },
             { "value": "mirror", "label": "Mirror" },
-            { "value": "ribbon", "label": "Ribbon" }
+            { "value": "ribbon", "label": "Ribbon" },
+            { "value": "vu", "label": "VU meter (analog needles)" }
           ]
         },
         {
@@ -46,7 +58,7 @@
       ],
       "saveButton": {
         "label": "Save",
-        "data": ["display_screen", "spectrum_style", "brightness", "transitions"]
+        "data": ["display_screen", "theme", "spectrum_style", "brightness", "transitions"]
       }
     },
     {
