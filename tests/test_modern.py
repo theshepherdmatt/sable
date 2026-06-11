@@ -107,6 +107,21 @@ def test_title_lines_split_for_sparse_radio():
     assert m._title_lines(V()) == ("Some Track", "Jazz FM")
 
 
+def test_albumart_failed_fetch_is_retryable_not_permanent():
+    """A failed fetch must NOT be cached forever -- within the cooldown get()
+    returns None without refetching; that's the only sticky window."""
+    import time
+    from sable.display.albumart import AlbumArtCache
+    c = AlbumArtCache(retry_after=999, log=lambda *a: None)
+    url = c.resolve_url("/albumart?x=1")
+    c._cache[url] = time.monotonic()              # simulate a just-now failure
+    assert c.get("/albumart?x=1") is None
+    assert url not in c._inflight                 # cooling down -> no refetch
+    c._cache[url] = time.monotonic() - 10_000     # failure long ago (cooldown over)
+    c.get("/albumart?x=1")
+    assert url in c._inflight                      # now it retries
+
+
 def test_mmss_formats():
     from sable.screens.modern import _mmss
     assert _mmss(0) == "0:00"

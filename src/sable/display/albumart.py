@@ -9,6 +9,7 @@ Uses stdlib urllib (no requests dependency).
 """
 import io
 import threading
+import time
 import urllib.request
 
 from PIL import Image
@@ -16,15 +17,16 @@ from PIL import Image
 
 class AlbumArtCache:
     def __init__(self, host="http://localhost:3000", size=(56, 56), mode="fit",
-                 timeout=5.0, maxsize=16, log=print):
+                 timeout=5.0, maxsize=16, retry_after=30.0, log=print):
         self.host = host.rstrip("/")
         self.size = size
         self.mode = mode          # "fit" = resize to size; "cover" = fill + crop
         self.timeout = timeout
         self.maxsize = maxsize
+        self.retry_after = retry_after   # re-attempt a failed fetch after N seconds
         self.log = log
         self._lock = threading.Lock()
-        self._cache = {}      # url -> Image | False (failed)
+        self._cache = {}      # url -> Image | float(failure monotonic time)
         self._order = []      # insertion order for bounded eviction
         self._inflight = set()
 
@@ -62,14 +64,19 @@ class AlbumArtCache:
         return self.host + art
 
     def get(self, art):
-        """Return a cached PIL image, or None (and start a fetch) if not ready."""
+        """Return a cached PIL image, or None (and start a fetch) if not ready.
+        A FAILED fetch is remembered only for retry_after seconds, then retried --
+        so a transient network blip on a station's art does not blank it for the
+        whole session."""
         url = self.resolve_url(art)
         if url is None:
             return None
         with self._lock:
-            if url in self._cache:
-                val = self._cache[url]
-                return val if val else None
+            val = self._cache.get(url)
+            if isinstance(val, Image.Image):
+                return val
+            if val is not None and (time.monotonic() - val) < self.retry_after:
+                return None                      # failed recently -> still cooling down
             if url in self._inflight:
                 return None
             self._inflight.add(url)
@@ -87,7 +94,7 @@ class AlbumArtCache:
             self.log("albumart: fetched", url)
         except Exception as exc:
             with self._lock:
-                self._store(url, False)
+                self._store(url, time.monotonic())   # remember failure time (retryable)
             self.log("albumart: fetch failed:", exc)
         finally:
             with self._lock:

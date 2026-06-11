@@ -75,10 +75,7 @@ class ModernScreen(Screen):
             canvas.paste(a, (0, 0))
             self._bleed(canvas, a, aw, h)
         else:
-            draw.rectangle((0, 0, aw - 1, h - 1), outline=70)
-            cx = aw // 2
-            draw.line((cx + 6, 16, cx + 6, 44), fill=110)        # note stem
-            draw.ellipse((cx - 4, 40, cx + 8, 48), outline=110)  # note head
+            self._draw_art_placeholder(canvas, draw, aw, h, dim=paused)
 
         tx = aw + self.FADE + 2
         tw = w - tx - 2
@@ -119,6 +116,26 @@ class ModernScreen(Screen):
         self._render_progress(canvas, draw, tx, w, h, st)
 
     # --- helpers ---
+    @staticmethod
+    def _draw_vinyl(draw, cx, cy, R, shades):
+        """A vinyl record (disc + grooves + label + spindle hole) -- the no-art
+        default. shades = (rim, body, groove, label)."""
+        rim, body, groove, label = shades
+        draw.ellipse((cx - R, cy - R, cx + R, cy + R), fill=body, outline=rim)
+        step = max(3, R // 4)
+        for gr in range(R - 4, 9, -step):
+            draw.ellipse((cx - gr, cy - gr, cx + gr, cy + gr), outline=groove)
+        lr = max(5, R // 4)
+        draw.ellipse((cx - lr, cy - lr, cx + lr, cy + lr), fill=label)
+        draw.ellipse((cx - 2, cy - 2, cx + 2, cy + 2), fill=10)
+
+    def _draw_art_placeholder(self, canvas, draw, aw, h, dim=False):
+        """Panel no-art default: a vinyl record filling the art square (some web
+        radio gives no cover) -- nicer than a bare note."""
+        draw.rectangle((0, 0, aw - 1, h - 1), fill=12)
+        shades = (40, 22, 32, 70) if dim else (95, 40, 60, 120)
+        self._draw_vinyl(draw, aw // 2, h // 2, min(aw, h) // 2 - 2, shades)
+
     def _title_lines(self, st):
         """Resolve the two text lines. Normal tracks: title + artist. Radio often
         gives only a title like 'STATION - tagline' with no artist/album, so when
@@ -242,11 +259,17 @@ class ModernScreen(Screen):
             # darken the lower band so text reads (composite black through scrim)
             canvas.paste(Image.composite(Image.new("L", (w, h), 0), canvas.copy(),
                                          self._get_scrim(w, h)), (0, 0))
-        # title + artist over the lower third
-        self.draw_text_clipped(canvas, "cine_title", st.title or "(no title)",
+        else:
+            # no cover (some web radio): a large, dim vinyl on the right instead of
+            # flat black -- reads as intentional, leaves the left clear for text.
+            self._draw_vinyl(draw, w - 30, h // 2, 42, (62, 16, 34, 60))
+        # title + artist over the lower third (split a "STATION - tagline" radio
+        # title when there is no artist, like the Panel theme)
+        line1, line2 = self._title_lines(st)
+        self.draw_text_clipped(canvas, "cine_title", line1,
                                self.app.fonts.get("sans_bold", 16), 6, 28, w - 12,
                                fill=140 if paused else 255)
-        self.draw_text_clipped(canvas, "cine_artist", st.artist or "",
+        self.draw_text_clipped(canvas, "cine_artist", line2,
                                self.app.fonts.get("sans", 10), 6, 49, w - 12,
                                fill=110 if paused else 205)
         if paused:
