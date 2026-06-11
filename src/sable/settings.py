@@ -23,8 +23,9 @@ DEFAULTS = {
         "show_date": False,
     },
     "screensaver": {
-        "type": "geo",               # none|snake|geo|sable
-        "idle_s": 3600,              # clock -> screensaver
+        "type": "geo",               # none|snake|geo|sable (animated tier: future)
+        "dim_s": 120,                # idle -> dim (reduced contrast + pixel-shift)
+        "idle_s": 3600,              # idle -> fade to OLED off (0 = never)
         "sleep_s": 600,              # screensaver -> OLED off (0 = never)
     },
     "dac": {

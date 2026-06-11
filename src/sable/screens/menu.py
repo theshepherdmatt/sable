@@ -8,7 +8,6 @@ menu). Scroll clamps at the ends (no wrap); long-press pops one level, or exits 
 the clock at the root.
 """
 from .base import Screen
-from .. import hardware
 
 _BACK = "__back__"
 
@@ -101,15 +100,10 @@ class MenuScreen(Screen):
         self.app.go(self.app.nowplaying_screen())
 
     def _set_brightness(self, level):
-        # Applied live so the user can compare; menu stays open.
+        # Applied live so the user can compare; menu stays open. Routed through
+        # the app so it becomes the idle ladder's base (dim/dark restore to it).
         self.app.settings.set("display", "brightness", level)
-        val = {"low": hardware.CONTRAST.low,
-               "medium": hardware.CONTRAST.medium,
-               "high": hardware.CONTRAST.high}.get(level, hardware.CONTRAST.medium)
-        try:
-            self.app.display.set_contrast(val)
-        except Exception:
-            pass
+        self.app.set_brightness_from_settings()
 
     # --- render ---
     def render(self, canvas, draw, w, h):

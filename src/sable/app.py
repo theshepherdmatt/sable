@@ -92,6 +92,12 @@ class App:
         self.store.subscribe(self._on_state)
         self.last_input = time.monotonic()
         self.asleep = False
+        # Burn-in ladder: awake (user brightness) -> dim (reduced contrast +
+        # pixel-shift) -> dark (faded off). Contrast is owned here so the ladder
+        # can lower it and restore the user's brightness on wake.
+        self._base_contrast = hardware.CONTRAST.medium
+        self._cur_contrast = self._base_contrast
+        self._idle_tier = "awake"
         self._stop_timer = None        # deferred stop->clock fall-back (Fix 2)
         self._stop_grace_s = 1.5
         self._last_switch_t = 0.0      # auto-transition cooldown (Fix 3)
@@ -194,36 +200,97 @@ class App:
     def _stamp_switch(self):
         self._last_switch_t = time.monotonic()
 
-    # --- idle / OLED sleep (burn-in protection) ---
+    # --- brightness / contrast (owned here so the idle ladder can dim/restore) ---
+    def _set_contrast(self, v):
+        self._cur_contrast = max(0, min(255, int(v)))
+        try:
+            self.display.set_contrast(self._cur_contrast)
+        except Exception:
+            pass
+
+    def set_base_contrast(self, v):
+        """Set the user's brightness. Applied immediately unless the panel is
+        currently dimmed/dark by the idle ladder (it restores to this on wake)."""
+        self._base_contrast = max(1, min(255, int(v)))
+        if self._idle_tier == "awake" and not self.asleep:
+            self._set_contrast(self._base_contrast)
+
+    def set_brightness_from_settings(self):
+        level = self.settings.get("display", "brightness", default="medium")
+        self.set_base_contrast({"low": hardware.CONTRAST.low,
+                                "medium": hardware.CONTRAST.medium,
+                                "high": hardware.CONTRAST.high}.get(
+                                    level, hardware.CONTRAST.medium))
+
+    def _dim_contrast(self):
+        return max(hardware.CONTRAST.low // 2, self._base_contrast // 3)
+
+    # --- idle journey: awake -> dim -> dark (burn-in protection) ---
     def note_activity(self):
         """Any real input (rotary/IR/IPC) or resumed playback: reset the idle
-        timer and wake the panel if it had slept."""
+        timer and, if the panel had dimmed or slept, return it to full user
+        brightness at once (a deliberate user action wants an instant response;
+        only the fade-to-DARK is gradual)."""
         self.last_input = time.monotonic()
-        if self.asleep:
+        if self.asleep or self._idle_tier != "awake":
+            was_asleep = self.asleep
             self.asleep = False
-            try:
-                self.display.wake()
-            except Exception:
-                pass
-            self.log("screensaver: OLED wake")
+            self._idle_tier = "awake"
+            if was_asleep:
+                try:
+                    self.display.wake()
+                except Exception:
+                    pass
+            self._set_contrast(self._base_contrast)
+            self.log("screensaver: wake")
             self.render()
 
     def tick_idle(self, now):
-        """Called each render tick. Moving content (playing) or an open menu
-        counts as activity; otherwise after idle_s of stillness the panel sleeps
-        (0xAE). idle_s == 0 disables sleep."""
-        active = self.store.get().status == "play" or self.fsm.current.name == "menu"
-        if active:
+        """Called each render tick. Playing or an open menu counts as activity
+        (stay awake); otherwise walk the ladder by idle time: dim_s -> reduced
+        contrast + pixel-shift, idle_s -> fade to dark then OLED off. Either
+        threshold == 0 disables that tier."""
+        if self.store.get().status == "play" or self.fsm.current.name == "menu":
             self.note_activity()
             return
+        idle = now - self.last_input
         idle_s = self.settings.get("screensaver", "idle_s", default=3600)
-        if not self.asleep and idle_s and (now - self.last_input) >= idle_s:
+        dim_s = self.settings.get("screensaver", "dim_s", default=120)
+        if idle_s and idle >= idle_s:
+            self._tier_dark()
+        elif dim_s and idle >= dim_s:
+            self._tier_dim()
+        else:
+            self._tier_awake()
+
+    def _tier_awake(self):
+        if self._idle_tier != "awake":
+            self._idle_tier = "awake"
+            self._set_contrast(self._base_contrast)
+
+    def _tier_dim(self):
+        if self.asleep:
+            return
+        if self._idle_tier != "dim":
+            self._idle_tier = "dim"
+            self._set_contrast(self._dim_contrast())
+            self.log("screensaver: dim")
+
+    def _tier_dark(self):
+        """Fade the contrast to 0 over a few render ticks (graceful, not a snap),
+        then power the panel off (0xAE). Idempotent once asleep."""
+        if self.asleep:
+            return
+        self._idle_tier = "dark"
+        step = max(1, self._base_contrast // 12)
+        self._set_contrast(self._cur_contrast - step)
+        if self._cur_contrast <= 0:
             self.asleep = True
             try:
                 self.display.sleep()
             except Exception:
                 pass
-            self.log("screensaver: OLED sleep (idle %ss)" % idle_s)
+            self.log("screensaver: OLED off (idle)")
 
     # --- rendering ---
     def render(self):
@@ -235,7 +302,23 @@ class App:
             draw = ImageDraw.Draw(img)
             if self.fsm.current is not None:
                 self.fsm.current.render(img, draw, self.display.width, self.display.height)
+            if self._idle_tier == "dim":
+                img = self._burn_in_shift(img)
             self.display.present(img)
+
+    def _burn_in_shift(self, img):
+        """While idle-dimmed, drift the whole frame by a few px on a slow cycle so
+        a static clock never burns a fixed image into the OLED. Pixels shifted in
+        from the edge are black (panel off there) -- invisible on an OLED."""
+        import math
+        t = time.monotonic()
+        dx = int(round(3 * math.sin(t / 11.0)))
+        dy = int(round(2 * math.sin(t / 17.0)))
+        if dx == 0 and dy == 0:
+            return img
+        out = self.display.blank_canvas()
+        out.paste(img, (dx, dy))
+        return out
 
     def go(self, name, **kwargs):
         self.fsm.go(name, **kwargs)
@@ -466,17 +549,21 @@ def run_hardware(stage="clock", rotate=hardware.OLED.rotate, contrast=None,
     import signal
     from .display.oled import OledDisplay
 
-    if contrast is None:
-        contrast = hardware.CONTRAST.medium
     root = os.path.normpath(os.path.join(os.path.dirname(__file__), "..", ".."))
 
     settings = Settings()
-    log("opening SSD1322 (rotate=%d, contrast=%d, fps=%d) ..." % (rotate, contrast, fps))
+    log("opening SSD1322 (rotate=%d, fps=%d) ..." % (rotate, fps))
     display = OledDisplay(hardware.OLED, rotate=rotate, log=log)
-    display.set_contrast(contrast)
     # dry_run=False on real hardware: transport commands (IR/IPC next/previous/
     # toggle) must actually drive Volumio, not just log.
     app = App(display, settings, dry_run=False, log=log)
+    # Brightness from the user's saved setting (the idle ladder dims/restores from
+    # this base); a --contrast flag still overrides for bench tuning.
+    if contrast is None:
+        app.set_brightness_from_settings()
+    else:
+        app.set_base_contrast(contrast)
+    log("brightness: base contrast %d" % app._base_contrast)
 
     stop = threading.Event()
     listener = None
