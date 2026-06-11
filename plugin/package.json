@@ -1,7 +1,7 @@
 {
   "name": "sable",
   "version": "1.0.0",
-  "description": "Settings bridge for the Sable OLED front-panel",
+  "description": "Sable front-panel display (OLED + rotary + buttons/LEDs + IR) for Volumio",
   "main": "index.js",
   "scripts": {
     "test": "echo \"No test specified\" && exit 0"
@@ -20,8 +20,8 @@
     "os": [
       "bookworm"
     ],
-    "details": "Edit the Sable front-panel settings from the Volumio web UI.",
-    "changelog": "Initial settings bridge.",
+    "details": "SSD1322 OLED display, rotary, buttons/LEDs and IR front panel, configured from the Volumio web UI.",
+    "changelog": "Full plugin: bundles + installs the Sable app and manages its service.",
     "manually_installed": true
   },
   "engines": {

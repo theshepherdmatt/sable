@@ -35,9 +35,30 @@ SablePlugin.prototype.onVolumioStart = function () {
   return libQ.resolve();
 };
 
-SablePlugin.prototype.onStart = function () { return libQ.resolve(); };
-SablePlugin.prototype.onStop = function () { return libQ.resolve(); };
-SablePlugin.prototype.onRestart = function () { return libQ.resolve(); };
+SablePlugin.prototype.onStart = function () {
+  var self = this;
+  var defer = libQ.defer();
+  require('child_process').exec(
+    '/usr/bin/sudo /bin/systemctl start sable.service', function (err) {
+      if (err) { self.logger.error('Sable: onStart (start service) failed: ' + err.message); }
+      else { self.logger.info('Sable: service started'); }
+      defer.resolve();   // resolve regardless so the plugin still loads its UI
+    });
+  return defer.promise;
+};
+
+SablePlugin.prototype.onStop = function () {
+  var self = this;
+  var defer = libQ.defer();
+  require('child_process').exec(
+    '/usr/bin/sudo /bin/systemctl stop sable.service', function (err) {
+      if (err) { self.logger.error('Sable: onStop (stop service) failed: ' + err.message); }
+      defer.resolve();
+    });
+  return defer.promise;
+};
+
+SablePlugin.prototype.onRestart = function () { return this.restartSable(); };
 SablePlugin.prototype.getConfigurationFiles = function () { return ['config.json']; };
 
 // --- settings.json helpers ---------------------------------------------------

@@ -32,3 +32,7 @@ disabled-units/
 
 # Per-machine hardware pin overrides (wiring); see config/hardware.example.json
 config/hardware.json
+
+# Built plugin payload (assembled by tools/build-plugin.sh)
+plugin/sableapp/
+plugin/node_modules/

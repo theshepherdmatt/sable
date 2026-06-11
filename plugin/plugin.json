@@ -1,8 +1,8 @@
 {
   "id": "sable",
   "name": "Sable",
-  "prettyName": "Sable",
-  "description": "Edit the Sable OLED front-panel settings from the Volumio web UI.",
+  "prettyName": "Sable Display",
+  "description": "Sable front-panel display (SSD1322 OLED + rotary + buttons/LEDs + IR) for Volumio.",
   "author": "Matt Shepherd",
   "version": "1.0.0",
   "category": "system_hardware",
