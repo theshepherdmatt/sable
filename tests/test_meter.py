@@ -49,6 +49,31 @@ def test_position_clamps_at_duration():
     assert s.live_position_ms() == 100 * 1000  # clamped at track end
 
 
+def test_all_visualiser_styles_render_nonblank_and_differ():
+    """Every style draws something for the same bars, and they are not identical
+    renders (bars/dots/mirror/ribbon are genuinely different visuals)."""
+    from PIL import Image, ImageDraw
+    from sable.app import build_sim_app
+    app = build_sim_app(frames_dir=None)
+    app.display.ascii_preview = False
+    app.store.apply_pushstate({"status": "play", "title": "T", "service": "mpd"})
+    meter = app.fsm.screens["spectrum"]
+    pattern = [0.1, 0.4, 0.7, 0.95, 0.6, 0.3] * 4
+    meter.feed(pattern[:meter.bars])
+    seen = {}
+    for style in ("bars", "dots", "mirror", "ribbon"):
+        meter.style = style
+        meter.smoother.values = list(pattern[:meter.bars])   # skip attack ramp
+        img = Image.new("L", (256, 64), 0)
+        meter.render(img, ImageDraw.Draw(img), 256, 64)
+        assert img.getbbox() is not None, style
+        seen[style] = list(img.getdata())
+    keys = list(seen)
+    for a in range(len(keys)):
+        for b in range(a + 1, len(keys)):
+            assert seen[keys[a]] != seen[keys[b]], (keys[a], keys[b])
+
+
 def main():
     tests = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for t in tests:

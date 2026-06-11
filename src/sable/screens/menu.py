@@ -31,6 +31,8 @@ class MenuScreen(Screen):
                 ("Modern", lambda: self._set_screen("modern")),
                 ("Spectrum Bars", lambda: self._set_spectrum("bars")),
                 ("Spectrum Dots", lambda: self._set_spectrum("dots")),
+                ("Spectrum Mirror", lambda: self._set_spectrum("mirror")),
+                ("Spectrum Ribbon", lambda: self._set_spectrum("ribbon")),
                 ("Back", _BACK),
             ]),
             ("Brightness", [
