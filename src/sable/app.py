@@ -37,6 +37,10 @@ from .settings import Settings
 from .state import StateStore
 
 TRANSPORT = {"play", "pause", "toggle", "next", "previous", "random", "repeat"}
+# Sources where the SOURCE (phone/app) owns transport, so a receiver-side
+# play/pause/skip is futile -- it either does nothing or the source immediately
+# resumes (AirPlay). Pressing transport here shows a hint instead of fighting it.
+_SOURCE_CONTROLLED = frozenset({"airplay", "airplay_emulation"})
 _FIXTURE = os.path.normpath(
     os.path.join(os.path.dirname(__file__), "..", "..", "tests", "fixtures", "rp_paused.json")
 )
@@ -460,7 +464,10 @@ class App:
         elif cmd == "home":
             self.fsm.dispatch("back")
         elif cmd in TRANSPORT:
-            self._transport(cmd)
+            if self._source_controls_transport():
+                self.show_osd("AIRPLAY", "source controls")
+            else:
+                self._transport(cmd)
         elif cmd == "volume":
             # Open-loop hint: the DAC changes its own volume; we just flash it.
             self.show_osd("+" if arg == "+" else "-", "VOLUME")
@@ -481,12 +488,23 @@ class App:
         else:
             self.log("unknown cmd:", cmd)
 
+    def _source_controls_transport(self):
+        return (self.store.get().service or "").strip().lower() in _SOURCE_CONTROLLED
+
     def _transport(self, cmd):
+        # Fire-and-forget: the `volumio` CLI can block for many seconds (seen at
+        # ~17s during AirPlay), and this runs on the INPUT thread (button/IR/
+        # rotary) -- a synchronous call would freeze all input. Popen returns at
+        # once; we don't need the result.
         if self.dry_run:
             self.log("[dry-run] volumio", cmd)
-        else:
-            import subprocess
-            subprocess.run(["volumio", cmd], check=False)
+            return
+        import subprocess
+        try:
+            subprocess.Popen(["volumio", cmd],
+                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        except Exception as e:
+            self.log("transport error:", cmd, e)
 
     def _dac_input(self):
         idx = (self.settings.get("dac", "input_index", default=0) + 1) % len(hardware.DAC_INPUTS)

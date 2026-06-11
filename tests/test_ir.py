@@ -74,6 +74,20 @@ def test_volume_and_mute_commands_raise_osd_without_changing_volume():
     assert app.store.get().volume == vol_before                # open-loop: unchanged
 
 
+def test_transport_suppressed_with_hint_during_airplay():
+    app = _app()
+    app.store.apply_pushstate({"status": "play", "service": "airplay_emulation",
+                               "title": "Desire"})
+    app._osd = None
+    app.handle("pause")                         # PAUSE during AirPlay
+    assert app._osd is not None and app._osd[0] == "AIRPLAY"   # hint, not a command
+    # a normal MPD source is not suppressed (dry-run transport, no OSD)
+    app.store.apply_pushstate({"status": "play", "service": "mpd", "title": "X"})
+    app._osd = None
+    app.handle("pause")
+    assert app._osd is None
+
+
 def main():
     tests = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for t in tests:
