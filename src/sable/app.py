@@ -53,14 +53,14 @@ def status_event(old, new):
     return None
 
 
-# Sources whose audio does NOT pass through MPD's PCM fifo, so CAVA sees nothing
-# and a spectrum/meter screen would be blank (rp2/streaming via mpv, web radio,
-# AirPlay via shairport). MPD / local-library DOES feed CAVA. Identified by the
-# Volumio `service` value. ONE gate -- keep the set here, not scattered as
-# service== checks across the resolution paths.
+# Sources whose audio does NOT pass through MPD's PCM fifo (they use their own
+# player), so CAVA sees nothing and a spectrum would be blank. Identified by the
+# Volumio `service` value. ONE gate -- keep the set here, not scattered.
+# NOTE: standard Volumio "webradio" DOES play through MPD, so it FEEDS CAVA and is
+# deliberately NOT excluded (it gets a spectrum). Only own-player sources below.
 _NON_CAVA_SERVICES = frozenset({
     "rp2", "radioparadise", "radio_paradise", "motherearthradio",
-    "webradio", "airplay", "airplay_emulation", "spop", "spotify",
+    "airplay", "airplay_emulation", "spop", "spotify",
 })
 
 

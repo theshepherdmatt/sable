@@ -67,6 +67,46 @@ def test_modern_renders_nonblank_from_fixture():
     assert img.getbbox() is not None       # something was drawn
 
 
+def test_webradio_now_gets_a_spectrum():
+    """Standard webradio plays through MPD -> it must feed CAVA (own-player
+    sources like rp2/spotify must not)."""
+    from sable.app import source_feeds_cava
+    from sable.state import PlayerState
+    assert source_feeds_cava(PlayerState().merged({"service": "webradio"})) is True
+    assert source_feeds_cava(PlayerState().merged({"service": "rp2"})) is False
+    assert source_feeds_cava(PlayerState().merged({"service": "spotify"})) is False
+
+
+def test_title_lines_split_for_sparse_radio():
+    from sable.app import build_sim_app
+    m = build_sim_app(frames_dir=None).fsm.screens["modern"]
+
+    class S:
+        title = " BBC RADIO 1 - The biggest new pop"
+        artist = ""
+        album = ""
+    a, b = m._title_lines(S())
+    assert a == "BBC RADIO 1" and b == "The biggest new pop"   # split when no artist
+
+    class T:
+        title = "Wandering Star"
+        artist = "Portishead"
+        album = "Dummy"
+    assert m._title_lines(T()) == ("Wandering Star", "Portishead")  # normal: no split
+
+    class U:                                                   # dash but artist set
+        title = "A - B"
+        artist = "X"
+        album = ""
+    assert m._title_lines(U()) == ("A - B", "X")
+
+    class V:                                                   # album fills the sub
+        title = "Some Track"
+        artist = ""
+        album = "Jazz FM"
+    assert m._title_lines(V()) == ("Some Track", "Jazz FM")
+
+
 def test_mmss_formats():
     from sable.screens.modern import _mmss
     assert _mmss(0) == "0:00"

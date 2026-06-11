@@ -41,7 +41,9 @@ def test_source_feeds_cava_predicate():
     assert source_feeds_cava(PlayerState(service="mpd")) is True
     assert source_feeds_cava(PlayerState(service="")) is True        # unknown -> assume mpd
     assert source_feeds_cava(PlayerState(service="rp2")) is False
-    assert source_feeds_cava(PlayerState(service="WebRadio")) is False  # case-insensitive
+    assert source_feeds_cava(PlayerState(service="RP2")) is False        # case-insensitive
+    # standard webradio plays through MPD -> it DOES feed cava (gets a spectrum)
+    assert source_feeds_cava(PlayerState(service="webradio")) is True
     assert source_feeds_cava(PlayerState(service="spop")) is False
     assert source_feeds_cava(None) is True
 

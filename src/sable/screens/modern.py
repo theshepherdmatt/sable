@@ -83,11 +83,12 @@ class ModernScreen(Screen):
         tx = aw + self.FADE + 2
         tw = w - tx - 2
 
-        # --- type hierarchy ---
-        self.draw_text_clipped(canvas, "title", st.title or "(no title)",
+        # --- type hierarchy (radio metadata is sparse -> fill it intelligently) ---
+        line1, line2 = self._title_lines(st)
+        self.draw_text_clipped(canvas, "title", line1,
                                self.app.fonts.get("sans_bold", 15), tx, 1, tw,
                                fill=125 if paused else 255)
-        self.draw_text_clipped(canvas, "artist", st.artist or "",
+        self.draw_text_clipped(canvas, "artist", line2,
                                self.app.fonts.get("sans", 11), tx, 19, tw,
                                fill=85 if paused else 175)
 
@@ -118,6 +119,18 @@ class ModernScreen(Screen):
         self._render_progress(canvas, draw, tx, w, h, st)
 
     # --- helpers ---
+    def _title_lines(self, st):
+        """Resolve the two text lines. Normal tracks: title + artist. Radio often
+        gives only a title like 'STATION - tagline' with no artist/album, so when
+        the artist is empty and the title has a ' - ', split it into a bold first
+        line + a grey second line -- filling the otherwise empty row."""
+        title = (st.title or "(no title)").strip()
+        sub = (st.artist or st.album or "").strip()
+        if not sub and " - " in title:
+            head, tail = title.split(" - ", 1)
+            return head.strip(), tail.strip()
+        return title, sub
+
     def _bleed(self, canvas, art, aw, h):
         """Fade the art's right edge into black so it dissolves into the text
         field instead of hard-cutting."""
@@ -167,16 +180,20 @@ class ModernScreen(Screen):
 
     def _render_progress(self, canvas, draw, tx, w, h, st):
         # A QUIET position line along the very bottom edge -- the panel's "floor",
-        # not a third competing bar above the level meters. Remaining time sits to
-        # its right.
+        # not a third competing bar above the level meters. A live stream has no
+        # position, so it shows a LIVE badge instead of a (meaningless) timer.
         f = self.app.fonts.get("sans", 8)
-        if st.duration_s > 0:
-            label = "-" + _mmss(st.duration_s - self.app.store.live_position_ms() / 1000.0)
-        else:
-            label = _mmss(self.app.store.live_position_ms() / 1000.0)
+        py = h - 1
+        if bool(st.stream) or st.duration_s <= 0:
+            label = "LIVE"
+            tw = self.text_width(draw, label, f)
+            draw.ellipse((w - tw - 12, py - 6, w - tw - 8, py - 2), fill=210)  # dot
+            self.text(canvas, (w - 2, h - 9), label, f, fill=175, anchor="ra")
+            draw.line((tx, py, w - tw - 16, py), fill=24)                       # baseline
+            return
+        label = "-" + _mmss(st.duration_s - self.app.store.live_position_ms() / 1000.0)
         tw = self.text_width(draw, label, f)
         self.text(canvas, (w - 2, h - 9), label, f, fill=130, anchor="ra")
-        py = h - 1
         right = w - tw - 6
         draw.line((tx, py, right, py), fill=24)
         fillw = int(max(0, right - tx) * self.app.store.progress_fraction())
