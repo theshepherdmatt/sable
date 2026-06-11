@@ -19,6 +19,18 @@ def marquee_offset(start, now, total, speed=30.0):
     return int((now - start) * speed) % max(1, total)
 
 
+def crisp_text(canvas, xy, text, font, fill=255, anchor=None):
+    """Crisp (non-antialiased) text on the greyscale canvas. Glyph SHAPE comes
+    from a 1-bit mask -- hard edges, exactly as sharp as 1-bit mode -- and the
+    chosen grey `fill` is pasted THROUGH it, so no soft AA halo. Module-level so
+    both Screen.text() and the app's OSD overlay can use it."""
+    if not text:
+        return
+    mask = Image.new("1", canvas.size, 0)
+    ImageDraw.Draw(mask).text(xy, text, font=font, fill=1, anchor=anchor)
+    canvas.paste(fill, (0, 0), mask)
+
+
 class Screen:
     name = "screen"
 
@@ -107,11 +119,7 @@ class Screen:
         that mask. So we keep type hierarchy (white title / grey artist / dim
         meta) with no soft AA halo, which a truetype draw straight onto an "L"
         canvas would add. anchor is honoured by ImageDraw on the mask."""
-        if not text:
-            return
-        mask = Image.new("1", canvas.size, 0)
-        ImageDraw.Draw(mask).text(xy, text, font=font, fill=1, anchor=anchor)
-        canvas.paste(fill, (0, 0), mask)
+        crisp_text(canvas, xy, text, font, fill, anchor)
 
     def draw_text_clipped(self, canvas, key, text, font, x, y, max_width,
                           fill=255, gap=24, speed=30.0, height=None):

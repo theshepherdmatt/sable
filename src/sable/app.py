@@ -117,6 +117,7 @@ class App:
         # the clock. _pause_idle marks that fall so reconcile_screen leaves it.
         self._pause_timer = None
         self._pause_idle = False
+        self._osd = None               # (big, small, until_monotonic) | None
 
     def nowplaying_screen(self):
         """Resolve the now-playing screen for the FSM @nowplaying token. A spectrum
@@ -373,9 +374,37 @@ class App:
                 img = self._burn_in_shift(img)
             cur_name = cur.name if cur is not None else None
             out = self._with_transition(img, cur_name)
+            out = self._draw_osd(out)
             self.display.present(out)
             self._last_frame = img
             self._rendered_screen = cur_name
+
+    # --- transient OSD overlay (volume / mute / DAC-input hints) -------------
+    def show_osd(self, big, small="", duration=1.4):
+        """Flash a centred overlay for `duration`s over whatever is on screen.
+        Used for OPEN-LOOP hints: the EVO Sabre DAC handles volume/mute itself
+        (Volumio mixer_type=None) and the DAC input is remote-only, so Sable just
+        shows the change as feedback -- it does not drive it."""
+        self._osd = (big, small, time.monotonic() + duration)
+        self.render()
+
+    def _draw_osd(self, img):
+        if self._osd is None:
+            return img
+        big, small, until = self._osd
+        if time.monotonic() >= until:
+            self._osd = None
+            return img
+        from PIL import Image
+        from .screens.base import crisp_text
+        out = Image.blend(img, Image.new("L", img.size, 0), 0.8)   # dim the screen
+        w, h = img.size
+        if small:
+            crisp_text(out, (w // 2, h // 2 - 14), small,
+                       self.fonts.get("sans", 11), fill=160, anchor="mm")
+        crisp_text(out, (w // 2, h // 2 + 7), big,
+                   self.fonts.get("sans_bold", 26), fill=255, anchor="mm")
+        return out
 
     def _with_transition(self, img, cur_name):
         """Crossfade: when the screen changed since the last present, dissolve the
@@ -432,6 +461,11 @@ class App:
             self.fsm.dispatch("back")
         elif cmd in TRANSPORT:
             self._transport(cmd)
+        elif cmd == "volume":
+            # Open-loop hint: the DAC changes its own volume; we just flash it.
+            self.show_osd("+" if arg == "+" else "-", "VOLUME")
+        elif cmd == "mute":
+            self.show_osd("MUTE")
         elif cmd == "dac_input":
             self._dac_input()
         elif cmd == "reload_config":
@@ -457,7 +491,9 @@ class App:
     def _dac_input(self):
         idx = (self.settings.get("dac", "input_index", default=0) + 1) % len(hardware.DAC_INPUTS)
         self.settings.set("dac", "input_index", idx)
-        self.log("DAC input ->", hardware.DAC_INPUTS[idx], "(hint; user-correctable)")
+        label = hardware.DAC_INPUTS[idx]
+        self.log("DAC input ->", label, "(hint; user-correctable)")
+        self.show_osd(label, "INPUT")
 
     # --- Phase 0 scripted slice ---
     def run_demo(self):
@@ -746,7 +782,7 @@ def run_hardware(stage="clock", rotate=hardware.OLED.rotate, contrast=None,
                 % (hardware.ROTARY.clk, hardware.ROTARY.dt, hardware.ROTARY.sw))
 
             from .inputs.ir import IrListener
-            ir = IrListener(app.handle, log=log)
+            ir = IrListener(app.handle, app=app, log=log)
             ir.start()
             log("IR listener started.")
 

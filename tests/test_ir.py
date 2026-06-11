@@ -1,0 +1,83 @@
+"""IR mode-aware key mapping + the open-loop volume/mute/input OSD.
+Run: python3 tests/test_ir.py
+"""
+import os
+import sys
+import time
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
+
+from PIL import Image, ImageDraw
+
+from sable.inputs.ir import command_for
+from sable.app import build_sim_app
+
+
+def test_nowplaying_keys_are_transport():
+    assert command_for("KEY_OK", "modern") == ("toggle", None)
+    assert command_for("KEY_OK", "clock") == ("toggle", None)
+    assert command_for("KEY_LEFT", "modern") == ("previous", None)
+    assert command_for("KEY_RIGHT", "spectrum") == ("next", None)
+    assert command_for("KEY_MENU", "modern") == ("menu", None)
+
+
+def test_menu_keys_navigate():
+    assert command_for("KEY_OK", "menu") == ("select", None)
+    assert command_for("KEY_RIGHT", "menu") == ("select", None)
+    assert command_for("KEY_LEFT", "menu") == ("back", None)
+    assert command_for("KEY_UP", "menu") == ("scroll", -1)
+    assert command_for("KEY_DOWN", "browse") == ("scroll", 1)
+    assert command_for("KEY_MENU", "menu") == ("home", None)
+
+
+def test_volume_transport_and_unmapped():
+    assert command_for("KEY_VOLUMEUP", "modern") == ("volume", "+")
+    assert command_for("KEY_VOLUMEDOWN", "menu") == ("volume", "-")
+    assert command_for("KEY_MUTE", "modern") == ("mute", None)
+    assert command_for("KEY_NEXT", "menu") == ("next", None)
+    assert command_for("KEY_INPUT", "modern") == ("dac_input", None)
+    assert command_for("KEY_POWER", "modern") is None          # never shuts down
+    assert command_for("KEY_WHATEVER", "modern") is None
+
+
+def _app():
+    app = build_sim_app(frames_dir=None)
+    app.display.ascii_preview = False
+    app.go("clock")
+    return app
+
+
+def test_osd_overlay_changes_frame_then_expires():
+    app = _app()
+    base = Image.new("L", (256, 64), 0)
+    app.fsm.current.render(base, ImageDraw.Draw(base), 256, 64)
+    app.show_osd("+", "VOLUME", duration=999)
+    assert app._osd is not None
+    over = app._draw_osd(base.copy())
+    assert list(over.getdata()) != list(base.getdata())        # overlay applied
+    app._osd = ("+", "VOLUME", time.monotonic() - 1)           # force-expire
+    out = app._draw_osd(base.copy())
+    assert app._osd is None                                    # cleared
+    assert list(out.getdata()) == list(base.getdata())         # nothing drawn
+
+
+def test_volume_and_mute_commands_raise_osd_without_changing_volume():
+    app = _app()
+    vol_before = app.store.get().volume
+    app.handle("volume", "+")
+    assert app._osd[0] == "+" and app._osd[1] == "VOLUME"
+    app.handle("mute")
+    assert app._osd[0] == "MUTE"
+    assert app.store.get().volume == vol_before                # open-loop: unchanged
+
+
+def main():
+    tests = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
+    for t in tests:
+        t()
+        print("PASS", t.__name__)
+    print("\nAll %d IR tests passed." % len(tests))
+
+
+if __name__ == "__main__":
+    main()
