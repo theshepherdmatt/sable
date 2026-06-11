@@ -28,7 +28,6 @@ class ModernScreen(Screen):
     name = "modern"
     ART = 64
     FLOOR_BARS = 28
-    FLOOR_CAP = 11          # max floor bar height (px)
     FADE = 10               # art->field bleed width (px)
 
     def __init__(self, app):
@@ -96,9 +95,9 @@ class ModernScreen(Screen):
             self._render_paused(canvas, draw, tx, w, h, st)
             return
 
-        # --- dim spectrum floor: now-playing AND spectrum, no mode switch ---
+        # --- double horizontal level bars (now-playing AND spectrum, no switch) ---
         if self.app.spectrum_available():
-            self._render_floor(canvas, draw, tx, w, h)
+            self._render_level_bars(canvas, draw, tx, w, h)
 
         # --- meta line: play glyph + samplerate/bitdepth ... volume ---
         meta_f = self.app.fonts.get("sans", 9)
@@ -138,20 +137,33 @@ class ModernScreen(Screen):
             self._reader = FifoBars(DISPLAY_FIFO, self.FLOOR_BARS, log=self.app.log)
         return self._smoother.update(self._reader.read())
 
-    def _render_floor(self, canvas, draw, tx, w, h):
+    def _render_level_bars(self, canvas, draw, tx, w, h):
+        """Two thin horizontal level bars in the bottom strip -- low-band and
+        high-band energy of the live spectrum -- each pulsing OUT from the centre
+        with a bright-centre gradient. Replaces the old vertical spectrum floor:
+        same data, a calmer/cleaner 'stereo VU' feel."""
         vals = self._floor_values()
         n = len(vals)
         if n == 0:
             return
-        bw = max(1, (w - tx) // n)
-        x = tx
-        for v in vals:
-            bh = int(max(0.0, min(1.0, v)) * self.FLOOR_CAP)
-            if bh > 0:
-                draw.rectangle((x, h - bh, x + bw - 2, h - 1), fill=70)
-            x += bw
-            if x >= w:
-                break
+        half = max(1, n // 2)
+        lo = sum(vals[:half]) / half
+        hi = sum(vals[half:]) / max(1, n - half)
+        x0, x1 = tx, w - 3
+        cx = (x0 + x1) // 2
+        halfw = max(1, (x1 - x0) // 2)
+        px = canvas.load()
+        for i, lvl in enumerate((lo, hi)):
+            by = 55 + i * 5                                # two 2px bars, y55 + y60
+            draw.line((x0, by, x1, by), fill=32)          # dim full-width track
+            draw.line((x0, by + 1, x1, by + 1), fill=20)
+            ext = int(halfw * max(0.0, min(1.0, lvl)))
+            for dx in range(ext + 1):
+                g = max(80, int(248 - 150 * dx / halfw))  # bright centre -> dim tips
+                px[cx - dx, by] = g
+                px[cx + dx, by] = g
+                px[cx - dx, by + 1] = max(60, g - 50)      # dimmer 2nd row -> depth
+                px[cx + dx, by + 1] = max(60, g - 50)
 
     def _render_progress(self, canvas, draw, tx, w, h, st):
         py = 52
