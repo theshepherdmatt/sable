@@ -25,10 +25,31 @@ def test_stopped_is_dark():
     assert _bl("stop")._desired_led() == 0
 
 
-def test_paused_pulses():
-    bl = _bl("pause")
+def test_paused_pulses_when_active():
+    bl = _bl("pause")                                # no app -> active pause
     assert bl._desired_led(now=0.0) == LED_PAUSE     # on phase of the heartbeat
     assert bl._desired_led(now=1.2) == 0             # off phase
+
+
+class _FakeApp:
+    asleep = False
+    _pause_idle = False
+
+
+def test_paused_solid_when_idle_on_clock():
+    bl = _bl("pause")
+    bl._app = _FakeApp()
+    bl._app._pause_idle = True
+    assert bl._desired_led(now=0.0) == LED_PAUSE     # solid -- both phases lit
+    assert bl._desired_led(now=1.2) == LED_PAUSE
+
+
+def test_paused_solid_when_asleep():
+    bl = _bl("pause")
+    bl._app = _FakeApp()
+    bl._app.asleep = True
+    assert bl._desired_led(now=0.0) == LED_PAUSE
+    assert bl._desired_led(now=1.2) == LED_PAUSE
 
 
 def test_boot_sweep_covers_all_seven_leds():

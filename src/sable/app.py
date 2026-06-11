@@ -735,7 +735,7 @@ def run_hardware(stage="clock", rotate=hardware.OLED.rotate, contrast=None,
             ipc.start()
 
             from .inputs.buttons import ButtonsLeds
-            buttons = ButtonsLeds(hardware.MCP, app.handle, app.store, log=log)
+            buttons = ButtonsLeds(hardware.MCP, app.handle, app.store, app=app, log=log)
             buttons.start()
 
         log("=== Sable on hardware: stage=%s. Ctrl-C to release SPI/GPIO. ===" % stage)

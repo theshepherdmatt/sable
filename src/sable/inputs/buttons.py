@@ -44,10 +44,12 @@ _BUTTON_MAP = [[1, 2], [3, 4], [5, 6], [7, 8]]
 
 
 class ButtonsLeds:
-    def __init__(self, mcp, handle, store, feedback_s=0.5, debounce_s=0.1, log=print):
+    def __init__(self, mcp, handle, store, app=None, feedback_s=0.5,
+                 debounce_s=0.1, log=print):
         self.mcp = mcp            # hardware.MCP dataclass
         self.handle = handle      # app.handle(cmd, arg)
         self.store = store        # StateStore -> play/pause LED
+        self._app = app           # App -> idle/asleep state for the LED policy
         self.feedback_s = feedback_s
         self.debounce_s = debounce_s
         self.log = log
@@ -174,8 +176,17 @@ class ButtonsLeds:
         if status == "play":
             return LED_PLAY
         if status == "pause":
-            return LED_PAUSE if (now % 1.4) < 1.0 else 0    # mostly-on heartbeat
-        return 0                                            # stopped/idle: dark
+            # Once idle (fallen to the clock) or the panel has slept, stop the
+            # flashing and hold the pause LED SOLID -- calmer, but still lit so you
+            # know it is paused even when the OLED is off. While actively paused on
+            # the now-playing screen it keeps the gentle heartbeat.
+            resting = self._app is not None and (
+                getattr(self._app, "asleep", False)
+                or getattr(self._app, "_pause_idle", False))
+            if resting:
+                return LED_PAUSE
+            return LED_PAUSE if (now % 1.4) < 1.0 else 0    # active-pause heartbeat
+        return 0                                            # stopped: dark
 
     def _flash(self, led):
         if self._timer:
