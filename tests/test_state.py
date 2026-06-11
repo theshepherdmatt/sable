@@ -17,6 +17,23 @@ def _silent():
     return StateStore(log=lambda *a: None)
 
 
+def test_blank_metadata_mid_stream_keeps_last_track():
+    """AirPlay pause pushes status=play with EMPTY title/artist and the default
+    albumart -- keep the last-known track rather than blanking to (no title)+logo."""
+    s = _silent()
+    s.apply_pushstate({"status": "play", "title": "Bang Bien", "artist": "NoW",
+                       "albumart": "/albumart?web=x", "service": "airplay_emulation"})
+    s.apply_pushstate({"status": "play", "title": "", "artist": "",
+                       "albumart": "/albumart"})        # AirPlay "pause" blank
+    st = s.get()
+    assert st.title == "Bang Bien"                       # kept
+    assert st.artist == "NoW"
+    assert st.albumart == "/albumart?web=x"
+    # a real new track (non-empty title) still replaces
+    s.apply_pushstate({"title": "New Song", "artist": "B"})
+    assert s.get().title == "New Song" and s.get().artist == "B"
+
+
 def test_pushstate_play_then_partial_pause():
     s = _silent()
     s.apply_pushstate({"status": "play", "title": "Song", "artist": "A",

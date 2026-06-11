@@ -49,15 +49,25 @@ class PlayerState:
                 return cast(d[key])
             except (TypeError, ValueError):
                 return cur
+        title = pick("title", self.title, str)
+        artist = pick("artist", self.artist, str)
+        album = pick("album", self.album, str)
+        albumart = pick("albumart", self.albumart, str)
+        # Active streams (notably AirPlay on pause) push EMPTY metadata mid-session
+        # -- title/artist go blank and albumart drops to the default logo. If we
+        # have a track and the incoming title is blank, KEEP the last-known
+        # metadata instead of collapsing the screen to "(no title)" + logo.
+        if "title" in d and not str(d.get("title") or "").strip() and self.title:
+            title, artist, album, albumart = self.title, self.artist, self.album, self.albumart
         return replace(
             self,
             status=pick("status", self.status, str),
-            title=pick("title", self.title, str),
-            artist=pick("artist", self.artist, str),
-            album=pick("album", self.album, str),
+            title=title,
+            artist=artist,
+            album=album,
             service=pick("service", self.service, str),
             uri=pick("uri", self.uri, str),
-            albumart=pick("albumart", self.albumart, str),
+            albumart=albumart,
             volume=pick("volume", self.volume, int),
             mute=pick("mute", self.mute, _as_bool),
             samplerate=pick("samplerate", self.samplerate, str),
