@@ -139,6 +139,14 @@ class BrowseScreen(Screen):
             self.text(canvas, (8, self.TOP + self.ROW_H), "Loading...",
                       self.app.fonts.get("sans", 12), fill=130)
             return
+        if not f["items"]:
+            self.text(canvas, (4, 1), (f["title"] or "").upper(),
+                      self.app.fonts.get("sans_bold", 10), fill=120)
+            self.text(canvas, (8, self.TOP + self.ROW_H - 2), "Empty",
+                      self.app.fonts.get("sans", 12), fill=150)
+            self.text(canvas, (8, self.TOP + self.ROW_H + 14), "hold to go back",
+                      self.app.fonts.get("sans", 9), fill=90)
+            return
         rows = []
         for it in f["items"]:
             label = it.get("title") or it.get("name") or "?"

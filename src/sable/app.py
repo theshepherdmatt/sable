@@ -464,7 +464,14 @@ class App:
         elif cmd == "menu":
             self.fsm.dispatch("menu")
         elif cmd == "home":
-            self.fsm.dispatch("back")
+            # Long-press = universal escape: jump out to the sources carousel from
+            # anywhere, and from the carousel itself out to now-playing/clock. So
+            # there is ALWAYS a way back, even from an empty browse list.
+            if self.fsm.current is not None and self.fsm.current.name == "home":
+                self.go(self.base_screen())
+            else:
+                self.go("home")
+            self.render()
         elif cmd in TRANSPORT:
             if self._source_controls_transport():
                 self.show_osd("AIRPLAY", "source controls")
