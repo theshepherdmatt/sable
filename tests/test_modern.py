@@ -67,6 +67,47 @@ def test_modern_renders_nonblank_from_fixture():
     assert img.getbbox() is not None       # something was drawn
 
 
+def test_mmss_formats():
+    from sable.screens.modern import _mmss
+    assert _mmss(0) == "0:00"
+    assert _mmss(95) == "1:35"
+    assert _mmss(-5) == "0:00"          # clamps negatives (rounding past end)
+
+
+def test_hero_renders_playing_and_paused_nonblank():
+    """The hero draws something for both play and pause, and the paused frame
+    differs from the playing one (designed paused state, not the same render)."""
+    from sable.app import build_sim_app
+    app = build_sim_app(frames_dir=None)
+    app.display.ascii_preview = False
+    app.store.apply_pushstate({"status": "play", "title": "Wandering Star",
+                               "artist": "Portishead", "service": "mpd",
+                               "seek": 95000, "duration": 268, "volume": 80})
+    app.go("modern")
+    play = Image.new("L", (256, 64), 0)
+    app.fsm.screens["modern"].render(play, ImageDraw.Draw(play), 256, 64)
+    assert play.getbbox() is not None
+
+    app.store.apply_pushstate({"status": "pause"})
+    app.go("modern")
+    paused = Image.new("L", (256, 64), 0)
+    app.fsm.screens["modern"].render(paused, ImageDraw.Draw(paused), 256, 64)
+    assert paused.getbbox() is not None
+    assert list(play.getdata()) != list(paused.getdata())   # genuinely different
+
+
+def test_paused_never_resolves_to_spectrum():
+    """A paused spectrum is flat bars (the old dead-blank panel). nowplaying must
+    fall to the modern hero when paused even with an MPD source + spectrum style."""
+    from sable.app import build_sim_app
+    app = build_sim_app(frames_dir=None)
+    app.settings._data.setdefault("display", {})["screen"] = "spectrum"  # in-memory only
+    app.store.apply_pushstate({"status": "play", "service": "mpd"})
+    assert app.nowplaying_screen() == "spectrum"
+    app.store.apply_pushstate({"status": "pause"})
+    assert app.nowplaying_screen() == "modern"
+
+
 def main():
     tests = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for t in tests:

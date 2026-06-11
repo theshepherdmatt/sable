@@ -100,15 +100,24 @@ class App:
 
     def nowplaying_screen(self):
         """Resolve the now-playing screen for the FSM @nowplaying token. A spectrum
-        style only resolves to the meter when the current source actually feeds CAVA
-        (source_feeds_cava) -- otherwise the fifo is empty and the meter would be
-        blank, so fall back to the modern screen. This is the ONE place the gate is
-        applied; base_screen() and reconcile_screen() both delegate here."""
+        style only resolves to the meter when (a) the current source actually feeds
+        CAVA (source_feeds_cava) -- else the fifo is empty and the meter would be
+        blank -- AND (b) we are actually PLAYING: a paused spectrum is just flat
+        bars (the old 'dead blank panel' on pause), so paused/stopped falls to the
+        modern hero, which owns the DESIGNED paused state. This is the ONE place the
+        gate is applied; base_screen() and reconcile_screen() both delegate here."""
         s = self.settings.get("display", "screen", default="modern")
+        st = self.store.get()
         if (s in ("spectrum", "vu", "digitalvu", "bars", "dots")
-                and source_feeds_cava(self.store.get())):
+                and st.status == "play"
+                and source_feeds_cava(st)):
             return "spectrum"
         return "modern"
+
+    def spectrum_available(self):
+        """True when the current source feeds CAVA, so the now-playing hero's dim
+        spectrum floor has real bars to draw (vs a flat/empty fifo)."""
+        return source_feeds_cava(self.store.get())
 
     def base_screen(self):
         """The screen to show when NOT in a menu/browse overlay: now-playing while
