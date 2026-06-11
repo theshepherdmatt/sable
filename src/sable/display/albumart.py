@@ -10,6 +10,7 @@ Uses stdlib urllib (no requests dependency).
 import io
 import threading
 import time
+import urllib.parse
 import urllib.request
 
 from PIL import Image
@@ -58,10 +59,16 @@ class AlbumArtCache:
         if not art:
             return None
         if art.startswith("http://") or art.startswith("https://"):
-            return art
-        if not art.startswith("/"):
-            art = "/" + art
-        return self.host + art
+            url = art
+        else:
+            if not art.startswith("/"):
+                art = "/" + art
+            url = self.host + art
+        # Percent-encode characters that are illegal in a URL -- Volumio radio
+        # thumbnails are local paths with SPACES (".../Absolut Radio.jpg") and
+        # urllib rejects a raw space outright. Keep "%" safe so the already-escaped
+        # MPD URLs (web=Big%20Thief/...) are not double-encoded.
+        return urllib.parse.quote(url, safe="/:?#[]@!$&'()*+,;=~%")
 
     def get(self, art):
         """Return a cached PIL image, or None (and start a fetch) if not ready.

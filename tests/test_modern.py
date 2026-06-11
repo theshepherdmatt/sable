@@ -107,6 +107,18 @@ def test_title_lines_split_for_sparse_radio():
     assert m._title_lines(V()) == ("Some Track", "Jazz FM")
 
 
+def test_albumart_encodes_illegal_chars_without_double_encoding():
+    """Volumio radio thumbnails are local paths with spaces (urllib rejects a raw
+    space); MPD URLs are already %-escaped (must not double-encode)."""
+    c = AlbumArtCache(host="http://localhost:3000", log=lambda *a: None)
+    u = c.resolve_url("/volumio/src/images/radio-thumbnails/Absolut Radio.jpg")
+    assert " " not in u
+    assert u == "http://localhost:3000/volumio/src/images/radio-thumbnails/Absolut%20Radio.jpg"
+    # already-encoded stays put (no %2520)
+    assert c.resolve_url("/albumart?web=Big%20Thief/x") == \
+        "http://localhost:3000/albumart?web=Big%20Thief/x"
+
+
 def test_albumart_failed_fetch_is_retryable_not_permanent():
     """A failed fetch must NOT be cached forever -- within the cooldown get()
     returns None without refetching; that's the only sticky window."""
