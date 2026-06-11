@@ -54,11 +54,22 @@
             { "value": "high", "label": "High" }
           ]
         },
-        { "id": "transitions", "element": "switch", "label": "Crossfade between screens", "value": true }
+        { "id": "transitions", "element": "switch", "label": "Crossfade between screens", "value": true },
+        {
+          "id": "display_rotate",
+          "element": "select",
+          "label": "Screen rotation",
+          "description": "Set to 180 degrees if the panel is mounted upside-down. Changing this restarts Sable.",
+          "value": { "value": 0, "label": "Normal (0 degrees)" },
+          "options": [
+            { "value": 0, "label": "Normal (0 degrees)" },
+            { "value": 180, "label": "Upside-down (180 degrees)" }
+          ]
+        }
       ],
       "saveButton": {
         "label": "Save",
-        "data": ["display_screen", "theme", "spectrum_style", "brightness", "transitions"]
+        "data": ["display_screen", "theme", "spectrum_style", "brightness", "transitions", "display_rotate"]
       }
     },
     {

@@ -123,7 +123,7 @@ journalctl -u sable.service -f           # live log (every screen switch, errors
 | **Album art missing on radio** | Some stations give no art (a vinyl-record placeholder shows). Real station logos load, even with spaces in the filename. |
 | **Clock never appears** | It shows when stopped, or after `screensaver.clock_after_s` (default 300 s) paused. Tune it in the web plugin. |
 | **Panel dims / sleeps too soon or never** | `screensaver.dim_s` (dim + pixel-shift) and `idle_s` (OLED off). Any input or playback wakes it. `0` disables a tier. |
-| **Panel upside down** | Add `"oled": {"rotate": 180}` to `config/hardware.json`. |
+| **Panel upside down** | In the Sable web plugin -> **Display -> Screen rotation**, choose **Upside-down (180 degrees)**. Sable restarts to apply it. (Headless: set `display.rotate` to `180` in `config/settings.json`, or run with `--rotate 180`.) |
 
 Old quadify units, if present, are **moved** (not deleted) to `disabled-units/` by
 the installer; restore them from there if you ever go back.

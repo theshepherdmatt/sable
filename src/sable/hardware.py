@@ -25,9 +25,8 @@ class OledPins:
     blank: int = 25              # BCM, pulled low ~1s on stop to force panel dark
     width: int = 256
     height: int = 64
-    rotate: int = 0              # luma rotate (x90); 0 = right-side-up. If your
-                                 # panel is mounted rotated, override in
-                                 # config/hardware.json: "oled": {"rotate": 180}.
+    # NB: panel rotation is NOT here -- it's a USER setting (display.rotate, in
+    # DEGREES) in settings.py, editable from the web UI. Wiring only below.
 
 
 @dataclass(frozen=True)

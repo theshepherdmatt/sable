@@ -735,7 +735,7 @@ def _start_spectrum_source(root, log=print):
     return [tone, cava]
 
 
-def run_hardware(stage="clock", rotate=hardware.OLED.rotate, contrast=None,
+def run_hardware(stage="clock", rotate=None, contrast=None,
                  fps=20, log=print):
     """FIRST real-OLED path. Hard-refuses while the live plugin runs so it can
     never contend for SPI/GPIO. Foreground; Ctrl-C releases SPI/GPIO cleanly.
@@ -758,8 +758,12 @@ def run_hardware(stage="clock", rotate=hardware.OLED.rotate, contrast=None,
     root = os.path.normpath(os.path.join(os.path.dirname(__file__), "..", ".."))
 
     settings = Settings()
-    log("opening SSD1322 (rotate=%d, fps=%d) ..." % (rotate, fps))
-    display = OledDisplay(hardware.OLED, rotate=rotate, log=log)
+    # Rotation is a USER setting (DEGREES); the --rotate flag overrides it for
+    # bench tuning. OledDisplay converts deg->luma quarter-turns.
+    rotate_deg = rotate if rotate is not None else int(
+        settings.get("display", "rotate", default=0) or 0)
+    log("opening SSD1322 (rotate=%ddeg, fps=%d) ..." % (rotate_deg, fps))
+    display = OledDisplay(hardware.OLED, rotate=rotate_deg, log=log)
     # dry_run=False on real hardware: transport commands (IR/IPC next/previous/
     # toggle) must actually drive Volumio, not just log.
     app = App(display, settings, dry_run=False, log=log)
@@ -905,10 +909,10 @@ def main(argv=None):
     ap.add_argument("--frames-dir", default="var/frames")
     ap.add_argument("--stage", default="clock",
                     choices=["clock", "modern", "spectrum", "full"])
-    ap.add_argument("--rotate", type=int, default=hardware.OLED.rotate,
-                    choices=[0, 1, 2, 3],
-                    help="luma rotate (x90 deg); default = frozen contract; "
-                         "override only if the panel reads upside-down")
+    ap.add_argument("--rotate", type=int, default=None,
+                    choices=[0, 90, 180, 270],
+                    help="panel rotation in DEGREES; default = the display.rotate "
+                         "user setting (use 180 if the panel is mounted upside-down)")
     ap.add_argument("--contrast", type=int, default=None,
                     help="0-255; default = hardware medium (150)")
     ap.add_argument("--fps", type=int, default=20)

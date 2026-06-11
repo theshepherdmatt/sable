@@ -158,6 +158,7 @@ SablePlugin.prototype.getUIConfig = function () {
       self._fillSelect(uiconf, 'spectrum_style', self._get(s, 'display', 'spectrum_style', 'bars'));
       self._fillSelect(uiconf, 'brightness', self._get(s, 'display', 'brightness', 'high'));
       self._fillSwitch(uiconf, 'transitions', self._get(s, 'display', 'transitions', true));
+      self._fillSelect(uiconf, 'display_rotate', self._int(self._get(s, 'display', 'rotate', 0), 0));
       self._fillSwitch(uiconf, 'show_seconds', self._get(s, 'clock', 'show_seconds', false));
       self._fillSwitch(uiconf, 'show_date', self._get(s, 'clock', 'show_date', false));
       self._fillInput(uiconf, 'clock_after_s', self._get(s, 'screensaver', 'clock_after_s', 300));
@@ -186,14 +187,24 @@ SablePlugin.prototype._saved = function (msg) {
 
 SablePlugin.prototype.saveDisplay = function (data) {
   var s = this._read();
+  var oldRotate = this._int(this._get(s, 'display', 'rotate', 0), 0);
+  var newRotate = this._int(data.display_rotate, 0);
   this._set(s, 'display', 'screen', this._val(data.display_screen));
   this._set(s, 'display', 'theme', this._val(data.theme));
   this._set(s, 'display', 'spectrum_style', this._val(data.spectrum_style));
   this._set(s, 'display', 'brightness', this._val(data.brightness));
   this._set(s, 'display', 'transitions', !!data.transitions);
+  this._set(s, 'display', 'rotate', newRotate);
   this._write(s);
-  this._reload();
-  this._saved('Display settings saved');
+  if (newRotate !== oldRotate) {
+    // Rotation is baked into the luma device at construction, so a live reload
+    // can't apply it -- the service must re-init. Restart instead of ping.
+    this.restartSable();
+    this._saved('Display saved -- restarting Sable to apply screen rotation');
+  } else {
+    this._reload();
+    this._saved('Display settings saved');
+  }
   return libQ.resolve();
 };
 

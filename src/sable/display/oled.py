@@ -14,6 +14,9 @@ from .base import Display
 
 class OledDisplay(Display):
     def __init__(self, pins, rotate=0, log=print):
+        # `rotate` is DEGREES (0/180) from the user's display.rotate setting; luma
+        # wants quarter-turns (0-3). 180deg (panel mounted upside-down) -> 2.
+        luma_rotate = (int(rotate) // 90) % 4
         super().__init__(pins.width, pins.height)
         from luma.core.interface.serial import spi
         from luma.oled.device import ssd1322
@@ -56,7 +59,7 @@ class OledDisplay(Display):
         # blit. Render budget verified on this Pi 4: full-frame greyscale pack
         # ~16ms (~60fps ceiling), and diff_to_previous only repacks the changed
         # bounding box, so a typical now-playing frame is far cheaper.
-        self._dev = ssd1322(self._serial, mode="RGB", rotate=rotate)
+        self._dev = ssd1322(self._serial, mode="RGB", rotate=luma_rotate)
 
     def present(self, image):
         # Screens draw on an "L" canvas; the device wants "RGB" for greyscale.

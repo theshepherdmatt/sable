@@ -16,6 +16,9 @@ DEFAULTS = {
         "spectrum_style": "bars",    # bars|dots|mirror|ribbon|vu (screen == spectrum)
         "brightness": "high",        # low|medium|high -> hardware.CONTRAST
         "transitions": True,         # crossfade between screens
+        "rotate": 0,                 # panel rotation DEGREES (0 or 180). 180 =
+                                     # mounted upside-down. Baked into the luma
+                                     # device at init -> a change needs a restart.
     },
     "clock": {
         "show_seconds": False,
