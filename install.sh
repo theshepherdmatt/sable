@@ -92,6 +92,45 @@ else
     warn "LIRC not installed -- skipping IR setup (buttons/rotary still work)"
 fi
 
+# 3c. MPD PCM fifo for the spectrum --------------------------------------------
+# Sable's cava reads MPD's raw PCM from /tmp/cava.fifo. That fifo is an EXTRA MPD
+# output (independent of the real DAC/HDMI output), so the spectrum works on any
+# audio device -- but a fresh Volumio has no such output. Add it to the MPD
+# TEMPLATE (survives Volumio regenerating mpd.conf) AND the live mpd.conf (takes
+# effect now). Skip if any output already targets /tmp/cava.fifo (e.g. quadify's),
+# so we never create a duplicate. MPD-routed audio only (local files, web radio);
+# AirPlay/Spotify bypass MPD and cannot feed it.
+MPD_TMPL="/volumio/app/plugins/music_service/mpd/mpd.conf.tmpl"
+MPD_LIVE="/etc/mpd.conf"
+read -r -d '' MPD_FIFO_BLOCK <<'EOF'
+
+# --- SABLE_CAVA_FIFO_START ---
+audio_output {
+    type            "fifo"
+    name            "sable_fifo"
+    path            "/tmp/cava.fifo"
+    format          "44100:16:2"
+    always_on       "yes"
+    enabled         "yes"
+}
+# --- SABLE_CAVA_FIFO_END ---
+EOF
+mpd_fifo_changed=0
+for f in "$MPD_TMPL" "$MPD_LIVE"; do
+    [ -f "$f" ] || continue
+    if grep -q "/tmp/cava.fifo" "$f"; then
+        log "MPD fifo output already present in $f -- leaving it"
+    else
+        printf '%s\n' "$MPD_FIFO_BLOCK" | $SUDO tee -a "$f" >/dev/null
+        log "added MPD spectrum fifo output to $f"
+        mpd_fifo_changed=1
+    fi
+done
+if [ "$mpd_fifo_changed" -eq 1 ]; then
+    $SUDO systemctl restart mpd 2>/dev/null || $SUDO systemctl restart mpd.service 2>/dev/null || true
+    log "restarted MPD to enable the spectrum fifo"
+fi
+
 # 4. Retire conflicting quadify units IF present (kept, just moved aside) -----
 mkdir -p "$DISABLED_DIR"
 for u in quadify.service cava.service quadify-buttonsleds.service ir_listener.service; do
