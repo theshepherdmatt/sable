@@ -1,10 +1,10 @@
-# Sable runtime deps -- curated, only what is actually imported.
-# Pinned to the versions Volumio 4 / Bookworm / Python 3.11 already ships,
-# so a fresh install needs no compilation.
+# Sable runtime deps -- curated, only what is actually imported, and PINNED to the
+# versions verified running on Volumio 4 / Bookworm / Python 3.11 (a Pi 4 + EVO
+# Sabre). This is the tested combination; bump deliberately, not casually.
 
 # OLED (SSD1322 over SPI)
-luma.oled==3.13.0
-luma.core==2.4.2
+luma.oled==3.8.0
+luma.core==2.3.1
 Pillow==9.5.0
 
 # Volumio Socket.IO -- EIO3 LOAD-BEARING PAIR, do not bump (see DESIGN.md).
@@ -13,4 +13,5 @@ python-engineio==3.14.2
 
 # Hardware I/O
 smbus2==0.5.0          # MCP23017 (i2c-1)
-# RPi.GPIO is installed via apt (python3-rpi.gpio), not pip.
+# RPi.GPIO is installed via apt (python3-rpi.gpio 0.7.1), not pip.
+# cava (spectrum/VU) is installed via apt (`apt install cava`), not pip.

@@ -585,7 +585,21 @@ def _quadify_active():
 _SABLE_CAVA_FIFO = "/tmp/sable-cava.fifo"
 _SABLE_DISPLAY_FIFO = "/tmp/sable-display.fifo"
 _MPD_PCM_FIFO = "/tmp/cava.fifo"   # MPD's real PCM output (Volumio "my_fifo")
-_CAVA_BIN = "/data/plugins/system_hardware/quadify/cava/bin/cava"
+# Fall-back to the quadify plugin's bundled cava ONLY if the system one is absent;
+# a fresh install gets cava from apt (`apt install cava`), so no quadify needed.
+_QUADIFY_CAVA = "/data/plugins/system_hardware/quadify/cava/bin/cava"
+
+
+def _resolve_cava(log=print):
+    """Prefer a system-installed cava (apt); else the quadify plugin's bundled
+    binary; else None (spectrum stays flat -- logged, not fatal)."""
+    import shutil
+    path = shutil.which("cava")
+    if not path and os.path.exists(_QUADIFY_CAVA):
+        path = _QUADIFY_CAVA
+    if not path:
+        log("cava: no binary found ('apt install cava') -- spectrum disabled")
+    return path
 
 
 def _start_live_spectrum_source(root, log=print):
@@ -598,7 +612,10 @@ def _start_live_spectrum_source(root, log=print):
     conf = os.path.join(root, "config", "cava-live.conf")
     if not os.path.exists(_SABLE_DISPLAY_FIFO):
         os.mkfifo(_SABLE_DISPLAY_FIFO)
-    cava = subprocess.Popen([_CAVA_BIN, "-p", conf])
+    cava_bin = _resolve_cava(log)
+    if not cava_bin:
+        return []
+    cava = subprocess.Popen([cava_bin, "-p", conf])
     log("live spectrum source: cava on %s -> %s" % (_MPD_PCM_FIFO, _SABLE_DISPLAY_FIFO))
     return [cava]
 
@@ -613,8 +630,11 @@ def _start_spectrum_source(root, log=print):
     for f in (_SABLE_CAVA_FIFO, _SABLE_DISPLAY_FIFO):
         if not os.path.exists(f):
             os.mkfifo(f)
+    cava_bin = _resolve_cava(log)
+    if not cava_bin:
+        return []
     # cava reads sable-cava.fifo, writes ascii bars to sable-display.fifo.
-    cava = subprocess.Popen([_CAVA_BIN, "-p", conf])
+    cava = subprocess.Popen([cava_bin, "-p", conf])
     # Child shell opens the input fifo for writing (so the parent never blocks).
     tone = subprocess.Popen(
         "exec python3 %s > %s" % (shlex.quote(tone_py), shlex.quote(_SABLE_CAVA_FIFO)),
