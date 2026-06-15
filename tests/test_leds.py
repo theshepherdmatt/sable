@@ -61,6 +61,26 @@ def test_airplay_shows_no_status_led():
     assert bl._desired_led() == 0
 
 
+def test_led_byte_identity_by_default():
+    # Standard wiring: the byte written to GPIOA is the logical mask, unchanged.
+    assert hardware.led_byte(LED_PLAY) == LED_PLAY
+    assert hardware.led_byte(LED_PAUSE) == LED_PAUSE
+    assert hardware.led_byte(0) == 0
+
+
+def test_led_byte_reversed_ribbon():
+    # Reversed LED ribbon: the byte is flipped end-to-end so play/pause, which
+    # would otherwise land on the bottom LEDs, are written to the top.
+    import dataclasses
+    rev = dataclasses.replace(hardware.MCP, led_reverse=True)
+    assert hardware.led_byte(LED_PLAY, rev) == 1 << 7    # play  -> far bit
+    assert hardware.led_byte(LED_PAUSE, rev) == 1 << 6   # pause -> next bit
+    assert hardware.led_byte(0, rev) == 0
+    # Round-trip: reversing twice is the identity for any single LED.
+    for led in LED_SWEEP:
+        assert hardware.led_byte(hardware.led_byte(led, rev), rev) == led
+
+
 def test_boot_sweep_covers_all_seven_leds():
     bits = 0
     for led in LED_SWEEP:

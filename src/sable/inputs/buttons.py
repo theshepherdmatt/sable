@@ -16,6 +16,8 @@ touch the bus concurrently.
 import threading
 import time
 
+from ..hardware import led_byte
+
 # LED bit positions on GPIOA (mirror hardware.py; one lit at a time).
 LED_PLAY = 1 << 0
 LED_PAUSE = 1 << 1
@@ -215,7 +217,10 @@ class ButtonsLeds:
         if value == self._hw_led or not self._bus:
             return
         try:
-            self._bus.write_byte_data(self.mcp.addr, self.mcp.GPIOA, value)
+            # value is the LOGICAL mask; led_byte maps it to the physical GPIOA
+            # byte (identity on standard wiring, reversed if mcp.led_reverse).
+            self._bus.write_byte_data(self.mcp.addr, self.mcp.GPIOA,
+                                      led_byte(value, self.mcp))
             self._hw_led = value
         except Exception as e:
             self.log("buttons: LED write error:", e)

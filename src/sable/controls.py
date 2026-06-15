@@ -11,7 +11,7 @@ is a pure function so it is unit-testable without an MCP.
 """
 import os
 
-from .hardware import LED_PAUSE, LED_PLAY
+from .hardware import LED_PAUSE, LED_PLAY, led_byte
 
 CONTROLS_SOCKET = os.environ.get("SABLE_CONTROLS_SOCK", "/tmp/sable-controls.sock")
 
@@ -88,7 +88,8 @@ class ControlsDaemon:
         self.log("controls: status LED -> %s (GPIOA=0x%02X)" % (status, mask))
         if self._bus is not None:
             try:
-                self._bus.write_byte_data(self.mcp.addr, self.mcp.GPIOA, mask)
+                self._bus.write_byte_data(self.mcp.addr, self.mcp.GPIOA,
+                                          led_byte(mask, self.mcp))
             except OSError as exc:
                 self.log("controls: LED write failed:", exc)
 

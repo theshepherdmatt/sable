@@ -50,6 +50,11 @@ class Mcp23017:
     # GPIOA = 7 LEDs (one lit at a time); GPIOB = 2col x 4row button matrix
     col_settle_s: float = 0.005
     swap_columns: bool = True
+    led_reverse: bool = False    # True ONLY if the LED ribbon is plugged in
+                                 # reversed (LED order flipped end-to-end, so
+                                 # play/pause show at the BOTTOM). Per-MACHINE
+                                 # wiring, set in config/hardware.json. See
+                                 # led_byte() below. Buttons (GPIOB) unaffected.
 
 
 @dataclass(frozen=True)
@@ -110,6 +115,27 @@ LED_NEXT = 3
 LED_SHUFFLE = 4
 LED_REPEAT = 5
 LED_SPARE = 6
+
+
+def led_byte(mask, mcp=None):
+    """Translate a logical LED bitmask into the byte to WRITE to GPIOA.
+
+    Standard wiring -> identity. On a unit whose LED ribbon is plugged in
+    reversed (mcp.led_reverse), the 8 LED lines run end-to-end backwards, so
+    logical bit b physically lands on LED (8-b) -- play/pause appear at the
+    bottom. Pre-reversing the byte across all 8 bits cancels that: play (bit 0)
+    goes out as bit 7 and lands back on LED 1. The power LED (bit 7, never driven
+    by software) is left alone either way. This is the LED analogue of the
+    button matrix's swap_columns.
+    """
+    mcp = MCP if mcp is None else mcp
+    if not getattr(mcp, "led_reverse", False):
+        return mask
+    out = 0
+    for b in range(8):
+        if mask & (1 << b):
+            out |= 1 << (7 - b)
+    return out
 
 # DAC input labels, for DACs whose own remote cycles a hardware input selector
 # (e.g. the Audiophonics EVO Sabre). The Pi cannot read or set the input; this is a

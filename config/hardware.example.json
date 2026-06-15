@@ -5,5 +5,9 @@
     "dc": 27,
     "rst": 24,
     "blank": 25
+  },
+  "_led_reverse_note": "Set mcp.led_reverse=true ONLY if the LED ribbon cable is plugged in REVERSED -- i.e. play/pause light the BOTTOM two LEDs instead of the top two. It flips the LED order end-to-end in software (GPIOA only; buttons are unaffected). Standard boards: omit this / leave false.",
+  "mcp": {
+    "led_reverse": false
   }
 }
