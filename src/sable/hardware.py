@@ -50,7 +50,7 @@ class Mcp23017:
     # GPIOA = 7 LEDs (one lit at a time); GPIOB = 2col x 4row button matrix
     col_settle_s: float = 0.005
     swap_columns: bool = True
-    led_reverse: bool = False    # True ONLY if the LED ribbon is plugged in
+    led_reverse: bool = True     # True ONLY if the LED ribbon is plugged in
                                  # reversed (LED order flipped end-to-end, so
                                  # play/pause show at the BOTTOM). Per-MACHINE
                                  # wiring, set in config/hardware.json. See
