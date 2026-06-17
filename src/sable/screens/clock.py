@@ -20,6 +20,7 @@ class ClockScreen(Screen):
     def render(self, canvas, draw, w, h):
         st = self.app.settings
         show_sec = st.get("clock", "show_seconds", default=False)
+        show_date = st.get("clock", "show_date", default=False)
         now = time.localtime()
         text = time.strftime("%H:%M:%S" if show_sec else "%H:%M", now)
 
@@ -28,8 +29,16 @@ class ClockScreen(Screen):
         ghost = (track.title or "").strip()
         if ghost:
             line = (track.artist + "  -  " + track.title) if track.artist else track.title
-            self.draw_text_clipped(canvas, "clk_ghost", line.upper(),
-                                   self.app.fonts.get("sans", 9), 4, 0, w - 8, fill=70)
+            line = line.upper()
+            gfont = self.app.fonts.get("sans", 9)
+            gw = self.text_width(draw, line, gfont)
+            if gw <= w - 8:
+                # Fits: centre it above the clock digits.
+                self.text(canvas, (w // 2, 6), line, gfont, fill=70, anchor="mm")
+            else:
+                # Too long: scroll it (clipped marquee), full width.
+                self.draw_text_clipped(canvas, "clk_ghost", line,
+                                       gfont, 4, 0, w - 8, fill=70)
             ty = h // 2 + 5
         else:
             ty = h // 2 - 1
@@ -37,6 +46,7 @@ class ClockScreen(Screen):
         face = self.app.fonts.get("sans_bold", 34 if show_sec else 38)
         self.text(canvas, (w // 2, ty), text, face, fill=255, anchor="mm")
 
-        date = time.strftime("%a %d %b", now).upper()
-        self.text(canvas, (w // 2, h - 7), date,
-                  self.app.fonts.get("sans", 10), fill=110, anchor="mm")
+        if show_date:
+            date = time.strftime("%a %d %b", now).upper()
+            self.text(canvas, (w // 2, h - 7), date,
+                      self.app.fonts.get("sans", 10), fill=110, anchor="mm")

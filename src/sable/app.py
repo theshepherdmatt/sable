@@ -843,18 +843,24 @@ def run_hardware(stage="clock", rotate=None, contrast=None,
             log("rotary started (BCM%d/%d/%d)."
                 % (hardware.ROTARY.clk, hardware.ROTARY.dt, hardware.ROTARY.sw))
 
-            from .inputs.ir import IrListener
-            ir = IrListener(app.handle, app=app, log=log)
-            ir.start()
-            log("IR listener started.")
+            if app.settings.get("ir", "enabled", default=True):
+                from .inputs.ir import IrListener
+                ir = IrListener(app.handle, app=app, log=log)
+                ir.start()
+                log("IR listener started.")
+            else:
+                log("IR listener disabled (controls.ir).")
 
             from .ipc import CommandServer
             ipc = CommandServer(app.handle, log=log)
             ipc.start()
 
-            from .inputs.buttons import ButtonsLeds
-            buttons = ButtonsLeds(hardware.MCP, app.handle, app.store, app=app, log=log)
-            buttons.start()
+            if app.settings.get("controls", "leds_enabled", default=True):
+                from .inputs.buttons import ButtonsLeds
+                buttons = ButtonsLeds(hardware.MCP, app.handle, app.store, app=app, log=log)
+                buttons.start()
+            else:
+                log("Buttons/LEDs disabled (controls.leds_enabled).")
 
         log("=== Sable on hardware: stage=%s. Ctrl-C to release SPI/GPIO. ===" % stage)
         while not stop.is_set():
