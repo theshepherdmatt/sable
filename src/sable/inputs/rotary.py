@@ -60,6 +60,7 @@ class RotaryEncoder:
         self._running = False
         self._decoder = QuadratureDecoder()
         self._last_detent = 0.0
+        self._reverse = getattr(pins, "reverse", False)
 
     def start(self):
         import RPi.GPIO as GPIO
@@ -84,10 +85,13 @@ class RotaryEncoder:
                 gap = now - self._last_detent
                 mult = accelerate(gap)
                 self._last_detent = now
+                emit = step * mult
+                if self._reverse:
+                    emit = -emit
                 if _dbg:
-                    print("ROTARY step=%+d gap=%.3fs mult=%d emit=%+d"
-                          % (step, gap, mult, step * mult), flush=True)
-                self.on_scroll(step * mult)
+                    print("ROTARY step=%+d gap=%.3fs mult=%d rev=%d emit=%+d"
+                          % (step, gap, mult, self._reverse, emit), flush=True)
+                self.on_scroll(emit)
             pressed = g.input(self.pins.sw) == 0
             if pressed and press_started is None:
                 press_started = time.monotonic()

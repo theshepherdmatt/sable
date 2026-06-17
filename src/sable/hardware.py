@@ -35,6 +35,11 @@ class RotaryPins:
     dt: int = 5                  # BCM
     sw: int = 6                  # BCM
     long_press_s: float = 2.5
+    reverse: bool = True         # True if CLK/DT are wired so that clockwise
+                                 # decodes as "down". Flips scroll direction for
+                                 # BOTH volume and menu (one source). Per-MACHINE
+                                 # wiring, set in config/hardware.json -- like
+                                 # Mcp23017.led_reverse.
 
 
 @dataclass(frozen=True)

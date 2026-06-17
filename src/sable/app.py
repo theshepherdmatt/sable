@@ -400,8 +400,15 @@ class App:
         volume) and flash a LIVE volume OSD (number + bar, re-read each frame so it
         tracks Volumio's volume event)."""
         self.note_activity()
-        if self.listener is not None:
-            self.listener.set_volume("+" if delta > 0 else "-")
+        delta = int(delta or 0)
+        if self.listener is not None and delta:
+            # Honour the turn magnitude: a fast spin (rotary acceleration, |delta|
+            # up to 4) moves the volume that many steps instead of a single tick,
+            # so you are not cranking the knob forever. Capped so a runaway value
+            # can't spam the mixer.
+            sign = "+" if delta > 0 else "-"
+            for _ in range(min(abs(delta), 10)):
+                self.listener.set_volume(sign)
         self._osd = (None, "VOLUME", time.monotonic() + 1.3)
         self._osd_volume = True
         self.render()

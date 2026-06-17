@@ -26,8 +26,9 @@ def test_nudge_emits_direction_and_flags_osd():
     app.nudge_volume(1)
     assert app.listener.calls == ["+"]
     assert app._osd_volume
+    # Magnitude is honoured: a fast turn (|delta|=3) moves 3 steps, not 1.
     app.nudge_volume(-3)
-    assert app.listener.calls == ["+", "-"]
+    assert app.listener.calls == ["+", "-", "-", "-"]
 
 
 def test_now_playing_scroll_is_volume():
