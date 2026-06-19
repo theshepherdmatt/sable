@@ -29,7 +29,7 @@ _DIAL_PATH = os.path.normpath(
 
 class MeterScreen(Screen):
     name = "spectrum"
-    TOP = 12                       # meter region starts below the title strip
+    TOP = 22                       # meter region: below the 2-line header (title + format)
 
     def __init__(self, app, style=None, bars=24, attack=0.5, decay=0.08):
         super().__init__(app)
@@ -60,6 +60,24 @@ class MeterScreen(Screen):
 
     def _raw(self):
         return self.test_bars if self.test_bars is not None else self.reader.read()
+
+    def _fmt_line(self, st):
+        """Format readout from the live Volumio state: 'samplerate · bitdepth'
+        (e.g. '96 kHz · 24 bit'). Both are pre-formatted display strings from
+        Volumio; drop either field gracefully when absent."""
+        parts = [p.strip() for p in (st.samplerate, st.bitdepth) if p and p.strip()]
+        return " · ".join(parts)
+
+    def _draw_line(self, canvas, draw, key, text, font, y, fill, w):
+        """Centre `text` horizontally if it fits the panel; otherwise fall back to
+        the screen's existing clipped marquee (so long titles keep scrolling)."""
+        if not text:
+            return
+        tw = self.text_width(draw, text, font)
+        if tw <= w - 4:
+            self.text(canvas, ((w - tw) // 2, y), text, font, fill=fill)
+        else:
+            self.draw_text_clipped(canvas, key, text, font, 2, y, w - 4, fill=fill)
 
     def on_exit(self):
         self.reader.close()
@@ -109,8 +127,10 @@ class MeterScreen(Screen):
         if style == "vu":
             self._render_vu(canvas, draw, w, h, st)
             return
-        self.draw_text_clipped(canvas, "sp_title", st.title or "(no title)",
-                               self.app.fonts.get("sans", 10), 2, 0, w - 4, fill=160)
+        self._draw_line(canvas, draw, "sp_title", st.title or "(no title)",
+                        self.app.fonts.get("sans", 10), 0, 160, w)
+        self._draw_line(canvas, draw, "sp_fmt", self._fmt_line(st),
+                        self.app.fonts.get("sans", 8), 11, 110, w)
         if not vals:
             return
         if style == "ribbon":
@@ -228,10 +248,14 @@ class MeterScreen(Screen):
         (lx, ly), (rx, ry) = self._vu_centres
         self._vu_needle(draw, lx, ly, self._left_vu)
         self._vu_needle(draw, rx, ry, self._right_vu)
-        # my own touch: a dim track title in the empty band above the dials, and
-        # quiet L/R channel tags so the twin meters read as stereo.
-        self.draw_text_clipped(canvas, "vu_title", st.title or "",
-                               self.app.fonts.get("sans", 9), 4, 0, w - 8, fill=150)
+        # my own touch: a dim track title in the empty band above the dials, a
+        # smaller format readout beneath it, and quiet L/R channel tags so the
+        # twin meters read as stereo. Both header lines sit above the needle
+        # sweep (tips reach y~38), so they never cross the dial.
+        self._draw_line(canvas, draw, "vu_title", st.title or "",
+                        self.app.fonts.get("sans", 9), 0, 150, w)
+        self._draw_line(canvas, draw, "vu_fmt", self._fmt_line(st),
+                        self.app.fonts.get("sans", 8), 11, 110, w)
         ch = self.app.fonts.get("sans_bold", 8)
         self.text(canvas, (lx - 2, h - 9), "L", ch, fill=120)
         self.text(canvas, (rx - 2, h - 9), "R", ch, fill=120)
