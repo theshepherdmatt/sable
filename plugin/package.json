@@ -1,6 +1,6 @@
 {
   "name": "sable",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Sable front-panel display (OLED + rotary + buttons/LEDs + IR) for Volumio",
   "main": "index.js",
   "scripts": {
@@ -21,7 +21,7 @@
       "bookworm"
     ],
     "details": "SSD1322 OLED display, rotary, buttons/LEDs and IR front panel, configured from the Volumio web UI.",
-    "changelog": "Full plugin: bundles + installs the Sable app and manages its service.",
+    "changelog": "1.1.0: IR remote-profile picker + bundled ir_controller profile library (default Xiaomi IR for TV box); MCP23017 I2C address auto-detect at startup; settings-UI copy polish.",
     "manually_installed": true
   },
   "engines": {
