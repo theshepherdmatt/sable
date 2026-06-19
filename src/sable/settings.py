@@ -33,7 +33,7 @@ DEFAULTS = {
         # Persisted HINT only. Tracks the remote INPUT button; user-correctable.
         "input_index": 0,
     },
-    "ir": {"enabled": True, "profile": "ApEvo"},
+    "ir": {"enabled": True, "profile": "Xiaomi IR for TV box"},
     "controls": {"leds_enabled": True},
     "_meta": {"rev": 1},
 }

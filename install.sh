@@ -81,10 +81,24 @@ add_overlay "dtparam=i2c_arm=on"
 add_overlay "dtoverlay=gpio-ir,gpio_pin=4"
 add_overlay "dtoverlay=gpio-shutdown,gpio_pin=17,active_low=1,gpio_pull=up"
 
-# 3b. IR (LIRC): ApEvo remote profile + options + boot hook (only if lirc present).
+# 3b. IR (LIRC): default remote profile + options + boot hook (only if lirc present).
+# The default lircd.conf = the SELECTED profile from settings.json (ir.profile),
+# default "Xiaomi IR for TV box", taken from the vendored profile library
+# (config/lirc/profiles/). The UI picker swaps it later. Falls back to the
+# canonical config/lirc/lircd.conf if the profile is missing. lirc_options keeps
+# output=/run/lirc/lircd (Sable's reader depends on that socket). NO lircrc/irexec
+# is installed -- sable-lirc-post only KILLS irexec and opens the socket.
 if [ -d /etc/lirc ]; then
-    log "configuring LIRC (ApEvo remote profile) ..."
-    $SUDO tee /etc/lirc/lircd.conf        < "$SABLE_DIR/config/lirc/lircd.conf"        >/dev/null
+    IR_PROFILE="Xiaomi IR for TV box"
+    if [ -f "$SABLE_DIR/config/settings.json" ]; then
+        _p="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get("ir",{}).get("profile",""))' \
+              "$SABLE_DIR/config/settings.json" 2>/dev/null || true)"
+        [ -n "$_p" ] && IR_PROFILE="$_p"
+    fi
+    IR_CONF="$SABLE_DIR/config/lirc/profiles/$IR_PROFILE/lircd.conf"
+    [ -f "$IR_CONF" ] || IR_CONF="$SABLE_DIR/config/lirc/lircd.conf"
+    log "configuring LIRC (remote profile: $IR_PROFILE) ..."
+    $SUDO tee /etc/lirc/lircd.conf        < "$IR_CONF"                                  >/dev/null
     $SUDO tee /etc/lirc/lirc_options.conf < "$SABLE_DIR/config/lirc/lirc_options.conf" >/dev/null
     $SUDO tee /usr/local/bin/sable-lirc-post.sh < "$SABLE_DIR/bin/sable-lirc-post.sh"  >/dev/null
     $SUDO chmod +x /usr/local/bin/sable-lirc-post.sh

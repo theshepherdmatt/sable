@@ -22,7 +22,7 @@
   },
   "ir": {
     "enabled": true,
-    "profile": "ApEvo"
+    "profile": "Xiaomi IR for TV box"
   },
   "screensaver": {
     "idle_s": 3600,

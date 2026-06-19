@@ -15,6 +15,10 @@ var libQ = require('kew');
 
 var SETTINGS_PATH = '/home/volumio/sable/config/settings.json';
 var SOCK = '/tmp/sable-cmd.sock';
+// Vendored ir_controller profile library (shipped under the app's config/).
+var PROFILES_DIR = '/home/volumio/sable/config/lirc/profiles';
+var LIRCD_CONF = '/etc/lirc/lircd.conf';
+var DEFAULT_IR_PROFILE = 'Xiaomi IR for TV box';
 
 module.exports = SablePlugin;
 
@@ -145,6 +149,38 @@ SablePlugin.prototype._fillSelect = function (uiconf, id, value) {
   el.value = { value: value, label: String(value) };   // unknown -> show raw
 };
 
+// IR remote profiles = subdirs of PROFILES_DIR that contain a lircd.conf. Read
+// at getUIConfig time (mirrors how ir_controller lists its configurations/ dir).
+SablePlugin.prototype._irProfiles = function () {
+  var out = [];
+  try {
+    var names = fs.readdirSync(PROFILES_DIR);
+    for (var i = 0; i < names.length; i++) {
+      var p = path.join(PROFILES_DIR, names[i]);
+      try {
+        if (fs.statSync(p).isDirectory() && fs.existsSync(path.join(p, 'lircd.conf'))) {
+          out.push(names[i]);
+        }
+      } catch (e) { /* skip unreadable entry */ }
+    }
+  } catch (e) {
+    this.logger.info('Sable: IR profiles dir unreadable: ' + e.message);
+  }
+  out.sort(function (a, b) {
+    return a.toLowerCase() < b.toLowerCase() ? -1 : (a.toLowerCase() > b.toLowerCase() ? 1 : 0);
+  });
+  return out;
+};
+
+// Fill a select's options from plain string values (label == value) and select
+// `current` (kept even if absent from the list, so a custom profile still shows).
+SablePlugin.prototype._fillProfileSelect = function (uiconf, id, values, current) {
+  var el = this._el(uiconf, id);
+  if (!el) { return; }
+  el.options = values.map(function (v) { return { value: v, label: v }; });
+  el.value = { value: current, label: current };
+};
+
 SablePlugin.prototype.getUIConfig = function () {
   var self = this;
   var defer = libQ.defer();
@@ -166,6 +202,8 @@ SablePlugin.prototype.getUIConfig = function () {
       self._fillInput(uiconf, 'idle_s', self._get(s, 'screensaver', 'idle_s', 3600));
       self._fillSwitch(uiconf, 'leds_enabled', self._get(s, 'controls', 'leds_enabled', true));
       self._fillSwitch(uiconf, 'ir_enabled', self._get(s, 'ir', 'enabled', true));
+      self._fillProfileSelect(uiconf, 'ir_profile', self._irProfiles(),
+        self._get(s, 'ir', 'profile', DEFAULT_IR_PROFILE));
       defer.resolve(uiconf);
     })
     .fail(function (e) {
@@ -236,6 +274,47 @@ SablePlugin.prototype.saveControls = function (data) {
   this._write(s);
   this._reload();
   this._saved('Control settings saved (restart Sable to apply hardware changes)');
+  return libQ.resolve();
+};
+
+// Apply an IR remote profile: persist ir.profile, copy the chosen profile's
+// lircd.conf into /etc/lirc, and restart lircd (sudo, mirroring restartSable).
+// lirc_options is left alone -> output stays /run/lirc/lircd, the socket Sable's
+// reader uses. The socket is re-chmod'd 666 so the app (user volumio) can read it
+// after lircd recreates it. NO lircrc / irexec is written -- ir.py is the only
+// action layer.
+SablePlugin.prototype.saveIrProfile = function (data) {
+  var self = this;
+  var profile = this._val(data.ir_profile);
+  // Guard the cp SOURCE before it ever reaches sudo: the profile name must be a
+  // single path segment (no separators, no '..'), resolve to a path INSIDE the
+  // seeded profiles dir, and the lircd.conf must exist. Stops a crafted name from
+  // copying an arbitrary file over /etc/lirc/lircd.conf via path traversal.
+  var name = String(profile == null ? '' : profile);
+  var base = path.resolve(PROFILES_DIR);
+  var src = path.resolve(base, name, 'lircd.conf');
+  var bad = !name || /[\\/]/.test(name) || name.indexOf('..') !== -1;
+  var inside = src.indexOf(base + path.sep) === 0;
+  if (bad || !inside || !fs.existsSync(src)) {
+    self.commandRouter.pushToastMessage('error', 'Sable', 'Invalid or unknown IR profile: ' + profile);
+    return libQ.resolve();   // leave the current profile in place; no cp, no restart
+  }
+  var s = this._read();                      // settings.json is the source of truth
+  this._set(s, 'ir', 'profile', profile);
+  this._write(s);
+  function shq(x) { return "'" + String(x).replace(/'/g, "'\\''") + "'"; }
+  var cmd = '/usr/bin/sudo /bin/cp ' + shq(src) + ' ' + shq(LIRCD_CONF) +
+            ' && /usr/bin/sudo /bin/systemctl restart lircd.service' +
+            ' && sleep 1 && /usr/bin/sudo /bin/chmod 666 /run/lirc/lircd';
+  require('child_process').exec(cmd, function (err) {
+    if (err) {
+      self.logger.error('Sable: IR profile apply failed: ' + err.message);
+      self.commandRouter.pushToastMessage('error', 'Sable', 'IR profile apply failed: ' + err.message);
+    } else {
+      self.commandRouter.pushToastMessage('success', 'Sable',
+        'IR remote set to "' + profile + '" (lircd restarted)');
+    }
+  });
   return libQ.resolve();
 };
 

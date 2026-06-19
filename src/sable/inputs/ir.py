@@ -5,9 +5,15 @@ Runs in-process on hardware (like the rotary). Replaces quadify's ir_listener.py
 lircd broadcasts each key to every connected client, so this coexists with any
 other listener without stealing events.
 
-BUNDLED REMOTE PROFILE ("ApEvo" -- an Audiophonics EVO Sabre remote, verified with
-irw). Swap config/lirc/lircd.conf for your own remote (keep the KEY_* names). This
-profile maps six buttons to the UI; the rest drive that DAC directly:
+REMOTE PROFILE LIBRARY: Sable ships the Volumio ir_controller profile library
+(config/lirc/profiles/<RemoteName>/lircd.conf, vendored by tools/update-ir-
+profiles.sh) and a picker in the Volumio UI. The SHIPPED DEFAULT is the "Xiaomi
+IR for TV box" remote; selecting a profile copies its lircd.conf to /etc/lirc and
+restarts lircd. command_for below maps the KEY_* names to Sable commands and is
+remote-agnostic (any profile emitting these names works).
+
+REFERENCE MAPPING ("ApEvo" -- an Audiophonics EVO Sabre remote, verified with
+irw). This profile maps six buttons to the UI; the rest drive that DAC directly:
     SELECT button      -> KEY_MENU   (NOT KEY_OK!)
     PLAY/PAUSE bar      -> KEY_OK
     D-pad UP/DOWN/LEFT/RIGHT -> KEY_UP/DOWN/LEFT/RIGHT
@@ -44,11 +50,15 @@ def command_for(key, mode):
     # SELECT button (KEY_MENU): open the menu from now-playing; select in a list.
     if key == "KEY_MENU":
         return ("select", None) if in_list else ("menu", None)
+    # HOME button (e.g. the default Xiaomi remote): always jump to the menu.
+    if key == "KEY_HOME":
+        return ("menu", None)
     # PLAY/PAUSE bar (KEY_OK): always play/pause.
     if key in ("KEY_OK", "KEY_ENTER", "KEY_PLAY", "KEY_PAUSE", "KEY_PLAYPAUSE"):
         return ("toggle", None)
-    # D-pad LEFT/RIGHT: skip tracks on now-playing; navigate in a list.
-    if key == "KEY_LEFT":
+    # D-pad LEFT (and the dedicated BACK button, e.g. the default Xiaomi remote):
+    # back out of a list; skip to the previous track on now-playing.
+    if key in ("KEY_LEFT", "KEY_BACK"):
         return ("back", None) if in_list else ("previous", None)
     if key == "KEY_RIGHT":
         return ("select", None) if in_list else ("next", None)
