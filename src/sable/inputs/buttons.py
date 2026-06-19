@@ -13,6 +13,7 @@ All MCP bus access is serialized on one lock (scan reads GPIOB; LED writes go to
 GPIOA), since the scan loop, the state callback, and the feedback timer can all
 touch the bus concurrently.
 """
+import dataclasses
 import threading
 import time
 
@@ -75,6 +76,7 @@ class ButtonsLeds:
         except Exception as e:
             self.log("buttons: I2C bus unavailable, controls disabled:", e)
             return
+        self._detect_addr()
         try:
             self._init_mcp()
         except Exception as e:
@@ -100,6 +102,46 @@ class ButtonsLeds:
             except Exception:
                 pass
             self._bus = None
+
+    def _addr_is_overridden(self):
+        """True if config/hardware.json pins mcp.addr explicitly. addr IS a real
+        override key (hardware._build applies any Mcp23017 field) -- it's just
+        absent from the shipped hardware.json. Explicit beats auto-detect."""
+        try:
+            from ..hardware import _load_overrides
+            return "addr" in (_load_overrides().get("mcp") or {})
+        except Exception:
+            return False
+
+    def _detect_addr(self):
+        """Probe 0x20-0x27 and adopt a lone responder as the working address.
+
+        An MCP23017 can't self-identify, so a single responder is the only safe
+        pick on this hardware; zero or several -> fall back to the configured
+        addr. Picks a working addr at runtime via a fresh dataclass instance --
+        the frozen hardware.MCP default is never mutated. A hardware.json addr
+        override always wins (explicit beats inferred)."""
+        if self._addr_is_overridden():
+            self.log("buttons: using configured MCP addr 0x%02x (hardware.json "
+                     "override)." % self.mcp.addr)
+            return
+        found = []
+        for addr in range(0x20, 0x28):
+            try:
+                self._bus.read_byte(addr)   # cheap read; ACK => device present
+                found.append(addr)
+            except Exception:
+                pass                         # no device at this addr -- ignore
+        if len(found) == 1:
+            self.mcp = dataclasses.replace(self.mcp, addr=found[0])
+            self.log("MCP23017 detected at 0x%02x" % found[0])
+        elif not found:
+            self.log("buttons: no MCP23017 found on i2c-%d (probed 0x20-0x27) -- "
+                     "controls disabled." % self.mcp.bus)
+        else:
+            self.log("buttons: multiple I2C devices responded (%s); an MCP can't "
+                     "self-identify, so not guessing -- using configured 0x%02x." %
+                     (", ".join("0x%02x" % a for a in found), self.mcp.addr))
 
     def _init_mcp(self):
         b, a = self._bus, self.mcp.addr
