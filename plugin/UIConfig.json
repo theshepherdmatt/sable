@@ -93,13 +93,13 @@
       "content": [
         { "id": "clock_after_s", "element": "input", "type": "number", "label": "Show clock after (seconds)", "value": 300,
           "attributes": [{ "property": "min", "value": 0 }],
-          "description": "Idle/paused time before the now-playing screen falls to the clock. 0 = never." },
+          "description": "These apply in order while idle: show clock -> dim -> switch off. Time before a paused/idle now-playing screen falls to the clock (300 = 5 minutes). 0 = never." },
         { "id": "dim_s", "element": "input", "type": "number", "label": "Dim after (seconds)", "value": 120,
           "attributes": [{ "property": "min", "value": 0 }],
-          "description": "Idle time before the panel dims and starts shifting (burn-in protection). 0 disables." },
+          "description": "Idle time before the panel dims and starts shifting (burn-in protection) (120 = 2 minutes). 0 disables." },
         { "id": "idle_s", "element": "input", "type": "number", "label": "Switch off after (seconds)", "value": 3600,
           "attributes": [{ "property": "min", "value": 0 }],
-          "description": "Idle time before the panel fades to black. 0 = never." }
+          "description": "Idle time before the panel fades to black (3600 = 1 hour). 0 = never." }
       ],
       "saveButton": { "label": "Save", "data": ["clock_after_s", "dim_s", "idle_s"] }
     },
@@ -116,6 +116,24 @@
       "saveButton": { "label": "Save", "data": ["leds_enabled", "ir_enabled"] }
     },
     {
+      "id": "ir_remote",
+      "label": "IR Remote Profile",
+      "element": "section",
+      "icon": "fa-rss",
+      "onSave": { "type": "controller", "endpoint": "system_hardware/sable", "method": "saveIrProfile" },
+      "content": [
+        {
+          "id": "ir_profile",
+          "element": "select",
+          "label": "Remote profile",
+          "description": "Pick the LIRC profile that matches your IR remote. Saving copies it to /etc/lirc and restarts lircd. Default: Xiaomi IR for TV box. Options are read from the bundled profile library.",
+          "value": { "value": "Xiaomi IR for TV box", "label": "Xiaomi IR for TV box" },
+          "options": []
+        }
+      ],
+      "saveButton": { "label": "Save", "data": ["ir_profile"] }
+    },
+    {
       "id": "actions",
       "label": "Actions",
       "element": "section",
@@ -123,7 +141,8 @@
       "content": [
         {
           "element": "button",
-          "label": "Reload settings on the panel now",
+          "label": "Reload settings",
+          "description": "Re-sync the panel if it looks out of date (no restart).",
           "onClick": {
             "type": "emit",
             "message": "callMethod",
@@ -133,6 +152,7 @@
         {
           "element": "button",
           "label": "Restart Sable",
+          "description": "Full restart; needed after changes like screen rotation.",
           "onClick": {
             "type": "emit",
             "message": "callMethod",
