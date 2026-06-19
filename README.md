@@ -107,15 +107,34 @@ visualisers, **cava** is used (`sudo apt install cava` -- it pulls some GUI libs
 
 ## Updating
 
-Plugin install: rebuild + reinstall the plugin (`bash tools/build-plugin.sh` then
-`volumio plugin install`), or for a quick code change:
+Pull the latest, then update whichever surface changed.
+
+**Quick code change** — OLED screens / display logic under `src/`. The service runs
+from the clone, so a restart reloads it:
 
 ```bash
 cd /home/volumio/sable && git pull
-sudo systemctl restart sable.service     # code changes load on restart
+sudo systemctl restart sable.service
 ```
-Settings changed from the web plugin apply live (no restart). Code changes need a
-service restart -- Python loads modules once at startup.
+
+**Plugin / settings-page change** — anything under `plugin/` (`index.js`,
+`UIConfig.json`). Volumio serves the plugin from `/data/plugins`, so it has to be
+refreshed and the node process restarted:
+
+```bash
+cd /home/volumio/sable
+git pull
+bash tools/build-plugin.sh          # reassemble the plugin payload from src
+cd plugin
+volumio plugin refresh              # push new plugin files + UIConfig into the system
+volumio vrestart                    # restart Volumio so the new index.js runs
+sudo systemctl restart sable.service   # reload the display code too
+```
+
+`volumio plugin refresh` updates the files and the settings-page layout (UIConfig)
+immediately, but a changed `index.js` keeps running the old version until `volumio
+vrestart` restarts the node process. Settings changed from the web plugin apply live
+(no restart). Code changes need a restart — Python loads modules once at startup.
 
 ## Debugging
 
