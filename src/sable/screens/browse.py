@@ -14,6 +14,7 @@ from .base import Screen
 
 # Synthetic top level -- the focused set the user asked for.
 _ROOTS = [
+    {"title": "Back", "_back": True},
     {"title": "Favourites", "uri": "favourites", "_folder": True},
     {"title": "Playlists", "uri": "playlists", "_folder": True},
     {"title": "Radio", "uri": "radio", "_folder": True},
@@ -120,7 +121,9 @@ class BrowseScreen(Screen):
         if not f["items"]:
             return
         item = f["items"][f["index"]]
-        if item.get("_play_all"):
+        if item.get("_back"):
+            self.handle_back()
+        elif item.get("_play_all"):
             songs = _play_all_tracks(f["items"])
             if songs and self.app.listener is not None:
                 self.app.listener.play_all(songs)
@@ -150,6 +153,7 @@ class BrowseScreen(Screen):
         items, _prev = _items_from_response(data)
         if len(_play_all_tracks(items)) >= 2:     # album/track list (not radio)
             items = [{"title": "Play all", "_play_all": True}] + items
+        items = [{"title": "Back", "_back": True}] + items
         frame = self._frame(getattr(self, "_pending_title", "..."), items)
         if self._replace_top:
             self.stack[-1] = frame       # carousel entry: result becomes the root
