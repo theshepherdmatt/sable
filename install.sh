@@ -17,6 +17,8 @@ set -uo pipefail
 SABLE_DIR="${SABLE_DIR:-/home/volumio/sable}"
 UNIT_SRC="$SABLE_DIR/systemd/sable.service"
 UNIT_DST="/etc/systemd/system/sable.service"
+BOOT_UNIT_SRC="$SABLE_DIR/systemd/sable-boot-splash.service"
+BOOT_UNIT_DST="/etc/systemd/system/sable-boot-splash.service"
 DISABLED_DIR="$SABLE_DIR/disabled-units"
 USERCONFIG="/boot/userconfig.txt"
 APT_OPTS="-y -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold"
@@ -161,8 +163,11 @@ done
 # 5. Install + enable Sable's boot service (NOT started -- starts on reboot) --
 log "installing $UNIT_DST"
 $SUDO tee "$UNIT_DST" < "$UNIT_SRC" >/dev/null
+log "installing $BOOT_UNIT_DST"
+$SUDO tee "$BOOT_UNIT_DST" < "$BOOT_UNIT_SRC" >/dev/null
 $SUDO systemctl daemon-reload
 $SUDO systemctl enable sable.service >/dev/null 2>&1 || true
+$SUDO systemctl enable sable-boot-splash.service >/dev/null 2>&1 || true
 
 echo
 log "DONE. Nothing was started or rebooted."

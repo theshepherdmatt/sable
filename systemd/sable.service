@@ -4,9 +4,9 @@ Description=Sable Display (Quadify successor) - OLED + rotary + spectrum
 # alongside quadify.service (which owns the same SPI/GPIO) -- the installer
 # disables quadify.service + cava.service. Buttons/LEDs (quadify-buttonsleds)
 # and IR (ir_listener) are independent services and keep running.
-After=network.target volumio.service
+After=network.target volumio.service sable-boot-splash.service
 Wants=volumio.service
-Conflicts=quadify.service
+Conflicts=quadify.service sable-boot-splash.service
 
 [Service]
 Type=simple

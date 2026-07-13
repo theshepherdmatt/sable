@@ -20,7 +20,7 @@ import time
 
 from mpd import MPDClient, ConnectionError as MPDConnectionError
 
-from ..volumio.listener import backoff_delay
+from ..backoff import backoff_delay
 
 
 def _guess_service(path):

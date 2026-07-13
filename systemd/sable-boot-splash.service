@@ -1,0 +1,22 @@
+[Unit]
+Description=Sable Boot Splash (early OLED "STARTING" message)
+# Starts as early as systemd allows (no network/volumio wait) so the panel
+# isn't dark during the 40-50s gap before sable.service comes up. sable.service
+# Conflicts= this unit, so systemd stops it (SIGTERM -> releases SPI/GPIO)
+# right before the real app claims the display -- no manual handoff needed.
+DefaultDependencies=no
+After=local-fs.target
+Before=sable.service
+
+[Service]
+Type=simple
+User=volumio
+Group=volumio
+WorkingDirectory=/home/volumio/sable
+Environment=PYTHONPATH=/home/volumio/sable/src
+ExecStart=/usr/bin/python3 -u -m sable.boot_splash
+KillSignal=SIGTERM
+TimeoutStopSec=5
+
+[Install]
+WantedBy=sysinit.target

@@ -19,10 +19,7 @@ import time
 
 import socketio
 
-
-def backoff_delay(attempt, base=2.0, cap=60.0):
-    """Reconnect delay for the Nth consecutive failure (1-based)."""
-    return min(base * max(1, attempt), cap)
+from ..backoff import backoff_delay
 
 
 class VolumioListener:
