@@ -562,13 +562,8 @@ class App:
     def run_demo(self):
         self.log("=== Sable Phase 0 vertical slice ===")
         self.go("splash")
-        splash = self.fsm.screens["splash"]
 
-        def waiting():
-            splash.subtitle = "waiting for network"
-            self.render()
-
-        synced = clock_gate.wait_for_clock(timeout=45.0, on_wait=waiting)
+        synced = clock_gate.wait_for_clock(timeout=45.0)
         self.log("clock trustworthy:", synced)
         self.go("clock")
 
@@ -827,13 +822,9 @@ def run_hardware(stage="clock", rotate=None, contrast=None,
         signal.signal(signal.SIGTERM, shutdown)
 
         app.go("splash")
-        splash = app.fsm.screens["splash"]
         threading.Thread(target=tick_loop, daemon=True, name="sable-tick").start()
 
-        def waiting():
-            splash.subtitle = "waiting for network"
-
-        synced = clock_gate.wait_for_clock(timeout=45.0, on_wait=waiting)
+        synced = clock_gate.wait_for_clock(timeout=45.0)
         log("clock trustworthy:", synced)
         app.go("clock")
 
