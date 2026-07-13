@@ -613,11 +613,25 @@ def run_modern_fixture(frames_dir="var/frames", frames=6, interval=1.0):
             "progress=%.2f" % app.store.progress_fraction())
 
 
-def run_modern_live(seconds=12, interval=2.0, frames_dir="var/frames"):
+def _platform():
+    """Which player backend to talk to: 'volumio' (default) or 'moode', set by
+    install.sh / install-moode.sh via the environment. Everything downstream of
+    the listener (state.py, screens, FSM) is backend-agnostic."""
+    return os.environ.get("SABLE_PLATFORM", "volumio").strip().lower()
+
+
+def _make_listener(store, log=print):
+    if _platform() == "moode":
+        from .moode.listener import MoodeListener
+        return MoodeListener(store, log=log)
     from .volumio.listener import VolumioListener
+    return VolumioListener(store, log=log)
+
+
+def run_modern_live(seconds=12, interval=2.0, frames_dir="var/frames"):
     app = build_sim_app(frames_dir=frames_dir)
     app.go("clock")
-    listener = VolumioListener(app.store, log=app.log)
+    listener = _make_listener(app.store, log=app.log)
     listener.start()
     time.sleep(2.0)
     st = app.store.get()
@@ -671,10 +685,13 @@ def run_spectrum_live(seconds=6, interval=0.1, frames_dir="var/frames"):
 # --- real hardware (SSD1322 over SPI) ---------------------------------------
 
 def _quadify_active():
-    """True if the live plugin is running -- a hard gate before we open SPI."""
+    """True if the predecessor app is running -- a hard gate before we open SPI.
+    quadify.service on Volumio, quoode.service on moOde (same predecessor code,
+    different name per platform)."""
     import subprocess
+    unit = "quoode.service" if _platform() == "moode" else "quadify.service"
     try:
-        r = subprocess.run(["systemctl", "is-active", "quadify.service"],
+        r = subprocess.run(["systemctl", "is-active", unit],
                            capture_output=True, text=True, timeout=5)
         return r.stdout.strip() == "active"
     except Exception:
@@ -754,8 +771,9 @@ def run_hardware(stage="clock", rotate=None, contrast=None,
       full      clock + listener + rotary (scroll/select on the real panel)
     """
     if _quadify_active():
-        print("Refusing --hardware: quadify.service is ACTIVE. Stop it first "
-              "(sudo systemctl stop quadify.service) so SPI/GPIO are free.",
+        unit = "quoode.service" if _platform() == "moode" else "quadify.service"
+        print("Refusing --hardware: %s is ACTIVE. Stop it first "
+              "(sudo systemctl stop %s) so SPI/GPIO are free." % (unit, unit),
               file=sys.stderr)
         return 2
 
@@ -820,8 +838,7 @@ def run_hardware(stage="clock", rotate=None, contrast=None,
         app.go("clock")
 
         if stage in ("modern", "full"):
-            from .volumio.listener import VolumioListener
-            listener = VolumioListener(app.store, log=log)
+            listener = _make_listener(app.store, log=log)
             app.listener = listener
             # Route async browse responses to the BrowseScreen, and the live source
             # list to the home carousel.

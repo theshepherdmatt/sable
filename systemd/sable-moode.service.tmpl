@@ -1,0 +1,32 @@
+[Unit]
+Description=Sable Display (Quoode successor) - OLED + rotary + spectrum
+# Sable's display app owns SPI (SSD1322) and the rotary GPIO. It must NOT run
+# alongside quoode.service (which owns the same SPI/GPIO) -- install-moode.sh
+# disables quoode.service + cava.service. Buttons/LEDs and IR are independent
+# services and keep running.
+#
+# This is a TEMPLATE -- install-moode.sh substitutes __SABLE_USER__/__SABLE_DIR__
+# with the actual moOde system user (chosen during moOde's own setup, NOT
+# always "pi") before installing it as /etc/systemd/system/sable.service.
+After=network.target mpd.service
+Wants=mpd.service
+Conflicts=quoode.service
+
+[Service]
+Type=simple
+User=__SABLE_USER__
+Group=__SABLE_USER__
+WorkingDirectory=__SABLE_DIR__
+Environment=PYTHONPATH=__SABLE_DIR__/src
+Environment=SABLE_PLATFORM=moode
+# --stage full = clock + live MPD listener + rotary + live CAVA spectrum
+# (Sable's own cava on MPD's /tmp/cava.fifo). run_hardware handles SIGTERM and
+# releases SPI/GPIO cleanly in its finally block.
+ExecStart=/usr/bin/python3 -u -m sable.app --hardware --stage full
+Restart=always
+RestartSec=3
+KillSignal=SIGTERM
+TimeoutStopSec=8
+
+[Install]
+WantedBy=multi-user.target

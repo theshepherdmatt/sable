@@ -1,0 +1,3 @@
+# Extra pure-Python dep for the moOde target ONLY (on top of requirements.txt).
+# moOde has no Socket.IO API -- Sable talks MPD directly via python-mpd2.
+python-mpd2==3.1.1
