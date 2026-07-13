@@ -29,12 +29,14 @@ _NAME_ICONS = {
     "nas": "nas", "usb": "usb",
     "tidal": "tidal", "qobuz": "qobuz", "spotify": "spotify",
     "radio paradise": "radio_paradise",
+    "radio paradise (rp2)": "radio_paradise", "rp2": "radio_paradise",
+    "mother earth radio": "mother_earth", "motherearthradio": "mother_earth",
     "settings": "config", "config": "config",
 }
 
 
 def _icon_name(label):
-    return _NAME_ICONS.get((label or "").strip().lower(), "music_library")
+    return _NAME_ICONS.get((label or "").strip().lower(), "unknown_source")
 
 
 class HomeScreen(Screen):

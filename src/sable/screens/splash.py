@@ -24,11 +24,13 @@ class SplashScreen(Screen):
 
     def render(self, canvas, draw, w, h):
         t = time.monotonic() - self._t0
-        self.text(canvas, (w // 2, 23), "SABLE",
+        self.text(canvas, (w // 2, 18), "SABLE",
                   self.app.fonts.get("sans_bold", 30), fill=255, anchor="mm")
+        self.text(canvas, (w // 2, 37), "by Quadify",
+                  self.app.fonts.get("sans", 9), fill=150, anchor="mm")
 
         # baseline + traveling scanner blob (warming-up indicator)
-        bx0, bx1, by = w // 2 - 72, w // 2 + 72, 42
+        bx0, bx1, by = w // 2 - 72, w // 2 + 72, 44
         draw.line((bx0, by, bx1, by), fill=45)
         span = bx1 - bx0
         pos = math.sin(t * 2.2) * 0.5 + 0.5          # 0..1 ping-pong
