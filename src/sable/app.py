@@ -844,9 +844,16 @@ def run_hardware(stage="clock", rotate=None, contrast=None,
             app.go("spectrum")  # force it: test tone, not live playback
 
         if stage == "full":
-            # Real-music spectrum: Sable's own cava on MPD's live PCM fifo, so the
-            # meter screen tracks actual playback (quadify's cava.service stopped).
-            procs = _start_live_spectrum_source(root, log=log)
+            # Real-music spectrum. Volumio/quadify: Sable spawns its own cava on
+            # MPD's live PCM fifo (quadify's cava.service stopped first). moOde:
+            # nothing to spawn -- peppyalsa already taps every audio_output's PCM
+            # unconditionally (see fifo_meter.PeppySpectrumBars), so the meter
+            # screen's reader (make_spectrum_reader) just opens its pipe directly.
+            if _platform() == "moode":
+                procs = []
+                log("live spectrum source: moOde peppyalsa (/tmp/peppyspectrum)")
+            else:
+                procs = _start_live_spectrum_source(root, log=log)
             from .inputs.rotary import RotaryEncoder
             rotary = RotaryEncoder(
                 hardware.ROTARY,

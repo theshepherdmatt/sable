@@ -15,6 +15,16 @@ import time
 CAVA_FIFO = os.environ.get("SABLE_CAVA_FIFO", "/tmp/sable-cava.fifo")
 DISPLAY_FIFO = os.environ.get("SABLE_DISPLAY_FIFO", "/tmp/sable-display.fifo")
 
+# moOde ships peppyalsa (an ALSA plugin, not an MPD fifo+cava like Volumio/quadify)
+# -- every audio_output on a stock moOde box already routes through it (see
+# /etc/alsa/conf.d/_audioout.conf: pcm._audioout -> slave.pcm "peppy"), so it is
+# ALWAYS live once anything plays; Sable never has to spawn anything for it,
+# unlike cava. Verified against /opt/peppyspectrum/spectrum.py (moOde's own
+# reader): named pipe, PIPE_SIZE = 4 * bars bytes, each bar a little-endian
+# uint32, values 0..spectrum_max (100 in moOde's default peppy.conf).
+PEPPY_SPECTRUM_FIFO = os.environ.get("SABLE_PEPPY_FIFO", "/tmp/peppyspectrum")
+PEPPY_SPECTRUM_MAX = 100
+
 
 class FifoBars:
     def __init__(self, path=DISPLAY_FIFO, bars=24, log=print, stale_s=2.0):
@@ -89,6 +99,84 @@ class FifoBars:
                 os.close(self._fd)
             finally:
                 self._fd = None
+
+
+class PeppySpectrumBars:
+    """Reads moOde's peppyalsa spectrum pipe directly -- the moOde analogue of
+    FifoBars. Binary framing (NOT cava's ASCII): each frame is `bars` little-
+    endian uint32s (4 bytes each), values 0..PEPPY_SPECTRUM_MAX. Same
+    open/reopen-on-stale idiom as FifoBars since peppyalsa's writer can restart
+    independently of Sable (e.g. moOde audio engine restart)."""
+
+    def __init__(self, path=PEPPY_SPECTRUM_FIFO, bars=24, log=print, stale_s=2.0):
+        self.path = path
+        self.bars = bars
+        self.log = log
+        self.stale_s = stale_s
+        self._fd = None
+        self._buf = b""
+        self._last = [0.0] * bars
+        self._last_data_t = None
+
+    def _open(self):
+        try:
+            self._fd = os.open(self.path, os.O_RDONLY | os.O_NONBLOCK)
+        except OSError:
+            self._fd = None
+
+    def _consume(self, data):
+        self._buf += data
+        frame_bytes = 4 * self.bars
+        if len(self._buf) < frame_bytes:
+            return
+        # Keep only the latest complete frame.
+        n_frames = len(self._buf) // frame_bytes
+        frame = self._buf[(n_frames - 1) * frame_bytes: n_frames * frame_bytes]
+        self._buf = self._buf[n_frames * frame_bytes:]
+        vals = []
+        for m in range(self.bars):
+            v = int.from_bytes(frame[4 * m:4 * m + 4], "little", signed=False)
+            vals.append(min(1.0, max(0.0, v / PEPPY_SPECTRUM_MAX)))
+        self._last = vals
+
+    def read(self):
+        now = time.monotonic()
+        if self._fd is None:
+            self._open()
+            self._last_data_t = now
+        if self._fd is None:
+            return self._last
+        got = False
+        try:
+            data = os.read(self._fd, 65536)
+            if data:
+                self._consume(data)
+                got = True
+        except (BlockingIOError, OSError):
+            pass
+        if got:
+            self._last_data_t = now
+        elif self._last_data_t is not None and (now - self._last_data_t) >= self.stale_s:
+            self.close()
+            self._open()
+            self._last_data_t = now
+        return self._last
+
+    def close(self):
+        if self._fd is not None:
+            try:
+                os.close(self._fd)
+            finally:
+                self._fd = None
+
+
+def make_spectrum_reader(bars=24, log=print):
+    """Platform-aware spectrum source: moOde reads peppyalsa's pipe directly
+    (always live, nothing to spawn); Volumio/quadify reads Sable's own cava
+    output (see app.py's _start_live_spectrum_source, which spawns cava)."""
+    if os.environ.get("SABLE_PLATFORM", "volumio").strip().lower() == "moode":
+        return PeppySpectrumBars(PEPPY_SPECTRUM_FIFO, bars, log=log)
+    return FifoBars(DISPLAY_FIFO, bars, log=log)
 
 
 class BarSmoother:

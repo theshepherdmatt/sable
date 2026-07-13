@@ -55,13 +55,22 @@ $SUDO dpkg --configure -a >/dev/null 2>&1 || true
 $SUDO apt-get -f $APT_OPTS install >/dev/null 2>&1 || true
 $SUDO apt-get update >/dev/null 2>&1 || warn "apt-get update had errors (continuing)"
 # Build toolchain + PREBUILT C-extension deps (Pillow/spidev/RPi.GPIO/smbus) so
-# pip does NOT need to compile them. Optional: lirc (IR), cava (spectrum),
-# i2c-tools. NOTE: mpd is already provided by moOde itself.
+# pip does NOT need to compile them. Optional: lirc (IR), i2c-tools. NOTE: mpd
+# is already provided by moOde itself. NO cava here -- moOde's spectrum comes
+# from peppyalsa (an ALSA plugin every audio_output already routes through by
+# default, writing to /tmp/peppyspectrum), which Sable reads directly
+# (fifo_meter.PeppySpectrumBars). Installing cava was ALSO a real problem on a
+# stock moOde 9 image: it shared one apt transaction with python3-rpi.gpio,
+# which conflicts with python3-rpi-lgpio (a dependency of moOde's own
+# boss2-oled-p3 package) -- apt aborts the WHOLE transaction on that conflict,
+# so cava silently never installed. Dropping it here removes that failure mode
+# entirely (RPi.GPIO itself still installs fine via the pip step below, which
+# compiles it from source independent of apt).
 $SUDO apt-get install $APT_OPTS --no-install-recommends \
   python3-dev python3-pip build-essential \
   zlib1g-dev libjpeg-dev libfreetype6-dev \
   python3-pil python3-rpi.gpio python3-spidev python3-cbor2 python3-smbus \
-  lirc i2c-tools cava \
+  lirc i2c-tools \
   || warn "apt install hit problems -- check the package list above"
 
 # 3. Python deps (system pip, pure-Python only; C-ext deps came from apt) -----
@@ -79,10 +88,15 @@ fi
 # SPI (OLED), I2C (buttons/LEDs), gpio-ir (IR BCM4). gpio-shutdown wires a safe
 # power-off button on BCM17 -- remove that line if your board has nothing on
 # BCM17 and powers off / won't stay up. Audio (USB/HAT/HDMI) is moOde's
-# concern -- no audio overlay here. moOde's boot config lives at /boot/config.txt
-# (not /boot/userconfig.txt -- that's Volumio's convention).
-USERCONFIG="/boot/config.txt"
-[ -f "$USERCONFIG" ] || USERCONFIG="/boot/firmware/config.txt"
+# concern -- no audio overlay here. On Bookworm+ (moOde 9) the boot partition
+# is mounted at /boot/firmware and THAT config.txt is the one the bootloader
+# reads -- a stale, inert /boot/config.txt stub can also exist and silently
+# eat writes that never take effect (verified on a real moOde 9 Pi 4: SPI/I2C
+# never came up after reboot because this picked the stub). Prefer the real
+# mounted partition; only fall back to /boot/config.txt if /boot/firmware
+# doesn't exist at all (older, non-Bookworm images).
+USERCONFIG="/boot/firmware/config.txt"
+[ -f "$USERCONFIG" ] || USERCONFIG="/boot/config.txt"
 add_overlay() {
     local line="$1"
     if ! grep -qxF "$line" "$USERCONFIG" 2>/dev/null; then
@@ -122,38 +136,11 @@ else
     warn "LIRC not installed -- skipping IR setup (buttons/rotary still work)"
 fi
 
-# 4c. MPD PCM fifo for the spectrum --------------------------------------------
-# Sable's cava reads MPD's raw PCM from /tmp/cava.fifo. That fifo is an EXTRA MPD
-# output (independent of the real DAC/HDMI output), so the spectrum works on any
-# audio device. Skip if any output already targets /tmp/cava.fifo (e.g. quoode's),
-# so we never create a duplicate. MPD-routed audio only (local files, web radio);
-# AirPlay/Spotify bypass MPD and cannot feed it.
-MPD_LIVE="/etc/mpd.conf"
-read -r -d '' MPD_FIFO_BLOCK <<'EOF'
-
-# --- SABLE_CAVA_FIFO_START ---
-audio_output {
-    type            "fifo"
-    name            "sable_fifo"
-    path            "/tmp/cava.fifo"
-    format          "44100:16:2"
-    always_on       "yes"
-    enabled         "yes"
-}
-# --- SABLE_CAVA_FIFO_END ---
-EOF
-if [ -f "$MPD_LIVE" ]; then
-    if grep -q "/tmp/cava.fifo" "$MPD_LIVE"; then
-        log "MPD fifo output already present in $MPD_LIVE -- leaving it"
-    else
-        printf '%s\n' "$MPD_FIFO_BLOCK" | $SUDO tee -a "$MPD_LIVE" >/dev/null
-        log "added MPD spectrum fifo output to $MPD_LIVE"
-        $SUDO systemctl restart mpd 2>/dev/null || $SUDO systemctl restart mpd.service 2>/dev/null || true
-        log "restarted MPD to enable the spectrum fifo"
-    fi
-else
-    warn "$MPD_LIVE not found -- spectrum fifo not configured"
-fi
+# 4c. Spectrum: NOTHING to configure here -- moOde's own peppyalsa ALSA plugin
+# already taps every audio_output's PCM unconditionally (verified: a stock
+# moOde 9 box routes pcm._audioout -> "peppy" by default) and writes bars to
+# /tmp/peppyspectrum, which Sable reads directly (fifo_meter.PeppySpectrumBars).
+# No MPD fifo output, no cava, nothing to restart.
 
 # 5. Retire conflicting Quoode units IF present (kept, just moved aside) -----
 mkdir -p "$DISABLED_DIR"

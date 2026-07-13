@@ -19,9 +19,10 @@ Group=__SABLE_USER__
 WorkingDirectory=__SABLE_DIR__
 Environment=PYTHONPATH=__SABLE_DIR__/src
 Environment=SABLE_PLATFORM=moode
-# --stage full = clock + live MPD listener + rotary + live CAVA spectrum
-# (Sable's own cava on MPD's /tmp/cava.fifo). run_hardware handles SIGTERM and
-# releases SPI/GPIO cleanly in its finally block.
+# --stage full = clock + live MPD listener + rotary + live spectrum (reads
+# moOde's own peppyalsa output at /tmp/peppyspectrum directly -- nothing to
+# spawn, unlike Volumio's cava). run_hardware handles SIGTERM and releases
+# SPI/GPIO cleanly in its finally block.
 ExecStart=/usr/bin/python3 -u -m sable.app --hardware --stage full
 Restart=always
 RestartSec=3

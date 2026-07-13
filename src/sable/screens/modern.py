@@ -16,7 +16,7 @@ paste), so it stays sharp on the greyscale canvas.
 from PIL import Image
 
 from .base import Screen
-from ..display.fifo_meter import DISPLAY_FIFO, FifoBars, BarSmoother
+from ..display.fifo_meter import BarSmoother, make_spectrum_reader
 
 
 def _mmss(seconds):
@@ -192,7 +192,7 @@ class ModernScreen(Screen):
         if self._test_floor is not None:
             return self._smoother.update(self._test_floor)
         if self._reader is None:
-            self._reader = FifoBars(DISPLAY_FIFO, self.FLOOR_BARS, log=self.app.log)
+            self._reader = make_spectrum_reader(self.FLOOR_BARS, log=self.app.log)
         return self._smoother.update(self._reader.read())
 
     def _render_level_bars(self, canvas, draw, tx, w, h):

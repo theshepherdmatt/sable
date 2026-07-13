@@ -17,7 +17,7 @@ import os
 from PIL import Image, ImageDraw
 
 from .base import Screen
-from ..display.fifo_meter import DISPLAY_FIFO, FifoBars, BarSmoother
+from ..display.fifo_meter import BarSmoother, make_spectrum_reader
 
 _STYLES = ("bars", "dots", "mirror", "ribbon", "vu")
 
@@ -35,7 +35,7 @@ class MeterScreen(Screen):
         super().__init__(app)
         self.style = style
         self.bars = bars
-        self.reader = FifoBars(DISPLAY_FIFO, bars, log=app.log)
+        self.reader = make_spectrum_reader(bars, log=app.log)
         self.smoother = BarSmoother(bars, attack, decay)
         self.test_bars = None
         self._peaks = [0.0] * bars
