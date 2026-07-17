@@ -31,7 +31,13 @@ def test_menu_buttons():
     assert command_for("KEY_LEFT", "menu") == ("back", None)
     assert command_for("KEY_UP", "menu") == ("scroll", -1)
     assert command_for("KEY_DOWN", "browse") == ("scroll", 1)
+    # KEY_OK: toggle by default (ApEvo's PLAY/PAUSE bar, SELECT is a separate
+    # KEY_MENU button); "select" only for profiles in OK_SELECTS_PROFILES
+    # (e.g. Xiaomi, whose center button IS the confirm button).
     assert command_for("KEY_OK", "menu") == ("toggle", None)
+    assert command_for("KEY_OK", "menu", ok_selects=True) == ("select", None)
+    assert command_for("KEY_OK", "modern", ok_selects=True) == ("toggle", None)
+    assert command_for("KEY_PLAY", "menu", ok_selects=True) == ("toggle", None)
 
 
 def test_dac_buttons_open_loop_or_ignored():

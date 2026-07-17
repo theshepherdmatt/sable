@@ -41,11 +41,21 @@ _NOWPLAYING = ("clock", "modern", "spectrum")
 # Commands that may auto-repeat when a key is held.
 _REPEATABLE = ("scroll", "volume")
 
+# Remote profiles whose center button is the ONLY confirm/select key (no
+# separate SELECT button reaching KEY_MENU/KEY_RIGHT with distinct intent) --
+# for these, KEY_OK/KEY_ENTER means "select" in a list. Remotes like ApEvo have
+# a dedicated PLAY/PAUSE bar on KEY_OK that must always toggle, even in a menu,
+# because their SELECT button already sends KEY_MENU -- leave those out.
+OK_SELECTS_PROFILES = frozenset({"Xiaomi IR for TV box"})
 
-def command_for(key, mode):
+
+def command_for(key, mode, ok_selects=False):
     """Map an IR KEY_* name to (command, arg) for the current screen `mode`.
     Returns None for keys we ignore. See the module docstring for the physical
-    button -> KEY_* mapping (SELECT=KEY_MENU, PLAY/PAUSE=KEY_OK on this remote)."""
+    button -> KEY_* mapping (SELECT=KEY_MENU, PLAY/PAUSE=KEY_OK on this remote).
+    `ok_selects` (set per the active remote profile, see OK_SELECTS_PROFILES)
+    makes KEY_OK/KEY_ENTER act as "select" in a list instead of always toggling
+    playback -- only for remotes whose center button IS the confirm button."""
     in_list = mode in ("menu", "browse")
     # SELECT button (KEY_MENU): open the menu from now-playing; select in a list.
     if key == "KEY_MENU":
@@ -53,8 +63,11 @@ def command_for(key, mode):
     # HOME button (e.g. the default Xiaomi remote): always jump to the menu.
     if key == "KEY_HOME":
         return ("menu", None)
-    # PLAY/PAUSE bar (KEY_OK): always play/pause.
-    if key in ("KEY_OK", "KEY_ENTER", "KEY_PLAY", "KEY_PAUSE", "KEY_PLAYPAUSE"):
+    # Center OK/ENTER button: PLAY/PAUSE bar on some remotes (always toggles),
+    # the confirm/select button on others (see ok_selects docs above).
+    if key in ("KEY_OK", "KEY_ENTER"):
+        return ("select", None) if (in_list and ok_selects) else ("toggle", None)
+    if key in ("KEY_PLAY", "KEY_PAUSE", "KEY_PLAYPAUSE"):
         return ("toggle", None)
     # D-pad LEFT (and the dedicated BACK button, e.g. the default Xiaomi remote):
     # back out of a list; skip to the previous track on now-playing.
@@ -94,6 +107,13 @@ class IrListener(threading.Thread):
         except Exception:
             return ""
 
+    def _ok_selects(self):
+        try:
+            profile = self._app.settings.get("ir", "profile", default="")
+        except Exception:
+            return False
+        return profile in OK_SELECTS_PROFILES
+
     @staticmethod
     def _socket_path():
         for p in _LIRC_SOCKETS:
@@ -132,7 +152,7 @@ class IrListener(threading.Thread):
             repeat = int(parts[1], 16)
         except ValueError:
             repeat = 0
-        mapping = command_for(key, self._mode())
+        mapping = command_for(key, self._mode(), ok_selects=self._ok_selects())
         if mapping is None:
             return
         cmd, arg = mapping

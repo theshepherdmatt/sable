@@ -19,6 +19,8 @@ var SOCK = '/tmp/sable-cmd.sock';
 var PROFILES_DIR = '/home/volumio/sable/config/lirc/profiles';
 var LIRCD_CONF = '/etc/lirc/lircd.conf';
 var DEFAULT_IR_PROFILE = 'Xiaomi IR for TV box';
+var USERCONFIG = '/boot/userconfig.txt';
+var DEFAULT_IR_GPIO_PIN = 4;
 
 module.exports = SablePlugin;
 
@@ -172,6 +174,18 @@ SablePlugin.prototype._irProfiles = function () {
   return out;
 };
 
+// Current gpio-ir pin, read from the userconfig.txt overlay line (the actual
+// source of truth on the Pi -- settings.json is not consulted so this stays
+// correct even if a line was hand-edited).
+SablePlugin.prototype._irGpioPin = function () {
+  try {
+    var txt = fs.readFileSync(USERCONFIG, 'utf8');
+    var m = txt.match(/^dtoverlay=gpio-ir,gpio_pin=(\d+)/m);
+    if (m) { return parseInt(m[1], 10); }
+  } catch (e) { /* file missing -> default */ }
+  return DEFAULT_IR_GPIO_PIN;
+};
+
 // Fill a select's options from plain string values (label == value) and select
 // `current` (kept even if absent from the list, so a custom profile still shows).
 SablePlugin.prototype._fillProfileSelect = function (uiconf, id, values, current) {
@@ -204,6 +218,7 @@ SablePlugin.prototype.getUIConfig = function () {
       self._fillSwitch(uiconf, 'ir_enabled', self._get(s, 'ir', 'enabled', true));
       self._fillProfileSelect(uiconf, 'ir_profile', self._irProfiles(),
         self._get(s, 'ir', 'profile', DEFAULT_IR_PROFILE));
+      self._fillInput(uiconf, 'ir_gpio_pin', self._irGpioPin());
       defer.resolve(uiconf);
     })
     .fail(function (e) {
@@ -282,7 +297,9 @@ SablePlugin.prototype.saveControls = function (data) {
 // lirc_options is left alone -> output stays /run/lirc/lircd, the socket Sable's
 // reader uses. The socket is re-chmod'd 666 so the app (user volumio) can read it
 // after lircd recreates it. NO lircrc / irexec is written -- ir.py is the only
-// action layer.
+// action layer. Also applies the IR receiver's GPIO pin (userconfig.txt overlay,
+// takes effect on reboot) if it was changed. Both actions need the sudoers.d/
+// sable rule installed by install.sh.
 SablePlugin.prototype.saveIrProfile = function (data) {
   var self = this;
   var profile = this._val(data.ir_profile);
@@ -299,6 +316,12 @@ SablePlugin.prototype.saveIrProfile = function (data) {
     self.commandRouter.pushToastMessage('error', 'Sable', 'Invalid or unknown IR profile: ' + profile);
     return libQ.resolve();   // leave the current profile in place; no cp, no restart
   }
+  var pin = this._int(data.ir_gpio_pin, this._irGpioPin());
+  var pinChanged = pin !== this._irGpioPin();
+  if (pin < 0 || pin > 27) {
+    self.commandRouter.pushToastMessage('error', 'Sable', 'Invalid IR GPIO pin: ' + pin + ' (expected 0-27)');
+    return libQ.resolve();
+  }
   var s = this._read();                      // settings.json is the source of truth
   this._set(s, 'ir', 'profile', profile);
   this._write(s);
@@ -306,10 +329,16 @@ SablePlugin.prototype.saveIrProfile = function (data) {
   var cmd = '/usr/bin/sudo /bin/cp ' + shq(src) + ' ' + shq(LIRCD_CONF) +
             ' && /usr/bin/sudo /bin/systemctl restart lircd.service' +
             ' && sleep 1 && /usr/bin/sudo /bin/chmod 666 /run/lirc/lircd';
+  if (pinChanged) {
+    cmd += ' && /usr/bin/sudo /usr/local/bin/sable-set-ir-pin.sh ' + shq(pin);
+  }
   require('child_process').exec(cmd, function (err) {
     if (err) {
       self.logger.error('Sable: IR profile apply failed: ' + err.message);
       self.commandRouter.pushToastMessage('error', 'Sable', 'IR profile apply failed: ' + err.message);
+    } else if (pinChanged) {
+      self.commandRouter.pushToastMessage('success', 'Sable',
+        'IR remote set to "' + profile + '" (lircd restarted). GPIO pin set to ' + pin + ' -- reboot to apply.');
     } else {
       self.commandRouter.pushToastMessage('success', 'Sable',
         'IR remote set to "' + profile + '" (lircd restarted)');

@@ -129,9 +129,13 @@
           "description": "Pick the LIRC profile that matches your IR remote. Saving copies it to /etc/lirc and restarts lircd. Default: Xiaomi IR for TV box. Options are read from the bundled profile library.",
           "value": { "value": "Xiaomi IR for TV box", "label": "Xiaomi IR for TV box" },
           "options": []
-        }
+        },
+        { "id": "ir_gpio_pin", "element": "input", "type": "number", "label": "IR receiver GPIO pin (BCM)",
+          "attributes": [{ "property": "min", "value": 0 }, { "property": "max", "value": 27 }],
+          "value": 4,
+          "description": "BCM pin the IR receiver is wired to (default 4, the standard Quadify wiring). Saving rewrites the gpio-ir line in /boot/userconfig.txt -- requires a reboot to take effect." }
       ],
-      "saveButton": { "label": "Save", "data": ["ir_profile"] }
+      "saveButton": { "label": "Save", "data": ["ir_profile", "ir_gpio_pin"] }
     },
     {
       "id": "actions",

@@ -110,7 +110,39 @@ else
     warn "LIRC not installed -- skipping IR setup (buttons/rotary still work)"
 fi
 
-# 3c. MPD PCM fifo for the spectrum --------------------------------------------
+# 3c. IR remote-switch + GPIO-pin helper sudoers rule -------------------------
+# The plugin's Node backend (index.js) runs as the 'volumio' user and needs
+# passwordless sudo for a small, fixed set of commands: switching the IR remote
+# profile (cp + restart lircd) and rewriting the gpio-ir pin in userconfig.txt
+# via the helper script below. Without this, "Save" on those settings pages
+# either silently fails or prompts for a password that doesn't exist
+# non-interactively. Root-owned, 0440, so `visudo -c` stays happy.
+$SUDO tee /usr/local/bin/sable-set-ir-pin.sh < "$SABLE_DIR/bin/sable-set-ir-pin.sh" >/dev/null
+$SUDO chmod +x /usr/local/bin/sable-set-ir-pin.sh
+SUDOERS_FILE=/etc/sudoers.d/sable
+SUDOERS_TMP="$(mktemp)"
+cat > "$SUDOERS_TMP" <<'EOF'
+# Sable: lets the settings-page Node backend (user volumio) apply an IR remote
+# profile switch and a gpio-ir pin change without a password. Installed by
+# install.sh; do not hand-edit (regenerated on every plugin install/update).
+Cmnd_Alias SABLE_CMDS = /bin/cp /home/volumio/sable/config/lirc/profiles/*/lircd.conf /etc/lirc/lircd.conf, \
+                         /bin/systemctl restart lircd.service, \
+                         /bin/chmod 666 /run/lirc/lircd, \
+                         /bin/systemctl start sable.service, \
+                         /bin/systemctl stop sable.service, \
+                         /bin/systemctl restart sable.service, \
+                         /usr/local/bin/sable-set-ir-pin.sh *
+volumio ALL=(ALL) NOPASSWD: SABLE_CMDS
+EOF
+if visudo -cf "$SUDOERS_TMP" >/dev/null 2>&1; then
+    $SUDO install -o root -g root -m 0440 "$SUDOERS_TMP" "$SUDOERS_FILE"
+    log "installed $SUDOERS_FILE (passwordless sudo for the settings-page IR/service actions)"
+else
+    warn "generated sudoers file failed validation -- NOT installed; IR profile/pin changes from the settings page may prompt for a password"
+fi
+rm -f "$SUDOERS_TMP"
+
+# 3d. MPD PCM fifo for the spectrum --------------------------------------------
 # Sable's cava reads MPD's raw PCM from /tmp/cava.fifo. That fifo is an EXTRA MPD
 # output (independent of the real DAC/HDMI output), so the spectrum works on any
 # audio device -- but a fresh Volumio has no such output. Add it to the MPD
