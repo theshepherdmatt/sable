@@ -211,9 +211,12 @@ else
     $SUDO git clone --quiet https://github.com/theshepherdmatt/sableradio.git "$SABLERADIO_DIR" || warn "git clone failed for sableradio"
 fi
 if [ -d "$SABLERADIO_DIR" ]; then
-    $SUDO chown -R volumio:volumio "$SABLERADIO_DIR"
+    (cd "$SABLERADIO_DIR" && npm install --production --quiet) || warn "npm install failed for sableradio"
+    volumio plugin enable -category music_service -name sableradio 2>/dev/null || true
     log "installed Sable Radio plugin to $SABLERADIO_DIR"
 fi
+# Ensure /data/plugins permissions remain owned by volumio so plugin manager works cleanly
+$SUDO chown -R volumio:volumio /data/plugins 2>/dev/null || true
 
 echo
 log "DONE. Nothing was started or rebooted."
