@@ -146,6 +146,18 @@ class VolumioListener:
             pass
 
     # --- the ONE place Sable initiates playback (everything else is read-only) ---
+    def play_uri(self, uri):
+        try:
+            self.sio.emit("replaceAndPlay", {"uri": uri})
+        except Exception as exc:
+            self.log("play_uri error:", exc)
+
+    def play_playlist(self, name):
+        try:
+            self.sio.emit("playPlaylist", {"name": name})
+        except Exception as exc:
+            self.log("play_playlist error:", exc)
+
     def play_item(self, item):
         """Replace the queue with a browse item and play it. Used by BrowseScreen
         when the user selects a playable item (song / web radio / playlist) on the

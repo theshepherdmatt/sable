@@ -35,6 +35,16 @@ DEFAULTS = {
     },
     "ir": {"enabled": True, "profile": "Xiaomi IR for TV box"},
     "controls": {"leds_enabled": True},
+    "buttons": {
+        "btn_1": {"action": "play", "arg": ""},
+        "btn_2": {"action": "pause", "arg": ""},
+        "btn_3": {"action": "previous", "arg": ""},
+        "btn_4": {"action": "next", "arg": ""},
+        "btn_5": {"action": "random", "arg": ""},
+        "btn_6": {"action": "repeat", "arg": ""},
+        "btn_7": {"action": "none", "arg": ""},
+        "btn_8": {"action": "none", "arg": ""},
+    },
     "_meta": {"rev": 1},
 }
 

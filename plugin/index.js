@@ -282,6 +282,20 @@ SablePlugin.prototype.saveScreensaver = function (data) {
   return libQ.resolve();
 };
 
+SablePlugin.prototype.saveButtonsConfig = function (data) {
+  var s = this._read();
+  var bActions = { 1: 'play', 2: 'pause', 3: 'previous', 4: 'next', 5: 'random', 6: 'repeat', 7: 'none', 8: 'none' };
+  for (var b = 1; b <= 8; b++) {
+    var act = this._val(data['btn' + b + '_action']) || bActions[b];
+    var arg = data['btn' + b + '_arg'] || '';
+    this._set(s, 'buttons', 'btn_' + b, { action: act, arg: String(arg).trim() });
+  }
+  this._write(s);
+  this._reload();
+  this._saved('Button assignments saved');
+  return libQ.resolve();
+};
+
 SablePlugin.prototype.saveControls = function (data) {
   var s = this._read();
   this._set(s, 'controls', 'leds_enabled', !!data.leds_enabled);

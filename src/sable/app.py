@@ -507,6 +507,14 @@ class App:
             else:
                 self.go("home")
             self.render()
+        elif cmd == "play_uri":
+            if self.listener is not None and arg:
+                self.listener.play_uri(str(arg))
+                self.show_osd("RADIO", str(arg))
+        elif cmd == "play_playlist":
+            if self.listener is not None and arg:
+                self.listener.play_playlist(str(arg))
+                self.show_osd("PLAYLIST", str(arg))
         elif cmd in TRANSPORT:
             if self._source_controls_transport():
                 self.show_osd("AIRPLAY", "source controls")

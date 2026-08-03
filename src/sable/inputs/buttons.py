@@ -44,7 +44,8 @@ _BUTTON_ACTION = {
     4: ("next", LED_NEXT),
     5: ("random", LED_SHUFF),
     6: ("repeat", LED_REPEAT),
-    7: (None, LED_SPARE),     # spare: LED feedback only
+    7: (None, LED_SPARE),
+    8: (None, 0),
 }
 # Matrix layout: row -> [col0, col1] button ids (matches the proven wiring).
 _BUTTON_MAP = [[1, 2], [3, 4], [5, 6], [7, 8]]
@@ -159,7 +160,7 @@ class ButtonsLeds:
                 for c in range(2):
                     curr, prev = matrix[r][c], self._prev[r][c]
                     btn = _BUTTON_MAP[r][c]
-                    if btn != 8 and curr == 0 and prev == 1:   # press edge (active-low)
+                    if curr == 0 and prev == 1:   # press edge (active-low)
                         self._on_press(btn)
                     self._prev[r][c] = curr
             time.sleep(self.debounce_s)
@@ -186,12 +187,26 @@ class ButtonsLeds:
             self.log("buttons: matrix read error:", e)
         return res
 
+    def _get_button_action(self, btn):
+        dflt_action, led = _BUTTON_ACTION.get(btn, (None, 0))
+        if self._app is not None and hasattr(self._app, "settings"):
+            cfg = self._app.settings.get("buttons", f"btn_{btn}")
+            if cfg and isinstance(cfg, dict):
+                act = cfg.get("action")
+                arg = cfg.get("arg")
+                if act:
+                    return (act, arg), led
+        return (dflt_action, None), led
+
     def _on_press(self, btn):
-        cmd, led = _BUTTON_ACTION.get(btn, (None, 0))
-        self.log("button %d pressed" % btn)
-        if cmd:
+        (cmd, arg), led = self._get_button_action(btn)
+        self.log("button %d pressed: cmd=%s arg=%s" % (btn, cmd, arg))
+        if cmd and cmd != "none":
             try:
-                self.handle(cmd)
+                if arg:
+                    self.handle(cmd, arg)
+                else:
+                    self.handle(cmd)
             except Exception as e:
                 self.log("buttons: handle error", cmd, e)
         if led:

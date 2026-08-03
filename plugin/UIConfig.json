@@ -1,21 +1,37 @@
 {
-  "page": { "label": "Sable", "icon": "fa-sliders" },
+  "page": {
+    "label": "Sable",
+    "icon": "fa-sliders"
+  },
   "sections": [
     {
       "id": "display",
       "label": "Display",
       "element": "section",
       "icon": "fa-television",
-      "onSave": { "type": "controller", "endpoint": "system_hardware/sable", "method": "saveDisplay" },
+      "onSave": {
+        "type": "controller",
+        "endpoint": "system_hardware/sable",
+        "method": "saveDisplay"
+      },
       "content": [
         {
           "id": "display_screen",
           "element": "select",
           "label": "Now-playing screen",
-          "value": { "value": "modern", "label": "Modern (album art)" },
+          "value": {
+            "value": "modern",
+            "label": "Modern (album art)"
+          },
           "options": [
-            { "value": "modern", "label": "Modern (album art)" },
-            { "value": "spectrum", "label": "Spectrum visualiser" }
+            {
+              "value": "modern",
+              "label": "Modern (album art)"
+            },
+            {
+              "value": "spectrum",
+              "label": "Spectrum visualiser"
+            }
           ]
         },
         {
@@ -23,10 +39,19 @@
           "element": "select",
           "label": "Modern theme",
           "description": "Used when the now-playing screen is Modern.",
-          "value": { "value": "panel", "label": "Panel (art + info)" },
+          "value": {
+            "value": "panel",
+            "label": "Panel (art + info)"
+          },
           "options": [
-            { "value": "panel", "label": "Panel (art + info)" },
-            { "value": "cinema", "label": "Cinema (full-bleed art)" }
+            {
+              "value": "panel",
+              "label": "Panel (art + info)"
+            },
+            {
+              "value": "cinema",
+              "label": "Cinema (full-bleed art)"
+            }
           ]
         },
         {
@@ -34,42 +59,93 @@
           "element": "select",
           "label": "Spectrum style",
           "description": "Used when the now-playing screen is set to Spectrum.",
-          "value": { "value": "bars", "label": "Bars" },
+          "value": {
+            "value": "bars",
+            "label": "Bars"
+          },
           "options": [
-            { "value": "bars", "label": "Bars" },
-            { "value": "dots", "label": "Dots" },
-            { "value": "mirror", "label": "Mirror" },
-            { "value": "ribbon", "label": "Ribbon" },
-            { "value": "vu", "label": "VU meter (analog needles)" }
+            {
+              "value": "bars",
+              "label": "Bars"
+            },
+            {
+              "value": "dots",
+              "label": "Dots"
+            },
+            {
+              "value": "mirror",
+              "label": "Mirror"
+            },
+            {
+              "value": "ribbon",
+              "label": "Ribbon"
+            },
+            {
+              "value": "vu",
+              "label": "VU meter (analog needles)"
+            }
           ]
         },
         {
           "id": "brightness",
           "element": "select",
           "label": "Brightness",
-          "value": { "value": "high", "label": "High" },
+          "value": {
+            "value": "high",
+            "label": "High"
+          },
           "options": [
-            { "value": "low", "label": "Low" },
-            { "value": "medium", "label": "Medium" },
-            { "value": "high", "label": "High" }
+            {
+              "value": "low",
+              "label": "Low"
+            },
+            {
+              "value": "medium",
+              "label": "Medium"
+            },
+            {
+              "value": "high",
+              "label": "High"
+            }
           ]
         },
-        { "id": "transitions", "element": "switch", "label": "Crossfade between screens", "value": true },
+        {
+          "id": "transitions",
+          "element": "switch",
+          "label": "Crossfade between screens",
+          "value": true
+        },
         {
           "id": "display_rotate",
           "element": "select",
           "label": "Screen rotation",
           "description": "Set to 180 degrees if the panel is mounted upside-down. Changing this restarts Sable.",
-          "value": { "value": 0, "label": "Normal (0 degrees)" },
+          "value": {
+            "value": 0,
+            "label": "Normal (0 degrees)"
+          },
           "options": [
-            { "value": 0, "label": "Normal (0 degrees)" },
-            { "value": 180, "label": "Upside-down (180 degrees)" }
+            {
+              "value": 0,
+              "label": "Normal (0 degrees)"
+            },
+            {
+              "value": 180,
+              "label": "Upside-down (180 degrees)"
+            }
           ]
         }
       ],
       "saveButton": {
         "label": "Save",
-        "data": ["display_screen", "theme", "spectrum_style", "brightness", "transitions", "display_rotate"]
+        "data": [
+          "display_screen",
+          "theme",
+          "spectrum_style",
+          "brightness",
+          "transitions",
+          "display_rotate"
+        ]
       }
     },
     {
@@ -77,65 +153,746 @@
       "label": "Clock",
       "element": "section",
       "icon": "fa-clock-o",
-      "onSave": { "type": "controller", "endpoint": "system_hardware/sable", "method": "saveClock" },
+      "onSave": {
+        "type": "controller",
+        "endpoint": "system_hardware/sable",
+        "method": "saveClock"
+      },
       "content": [
-        { "id": "show_seconds", "element": "switch", "label": "Show seconds", "value": false },
-        { "id": "show_date", "element": "switch", "label": "Show date", "value": false }
+        {
+          "id": "show_seconds",
+          "element": "switch",
+          "label": "Show seconds",
+          "value": false
+        },
+        {
+          "id": "show_date",
+          "element": "switch",
+          "label": "Show date",
+          "value": false
+        }
       ],
-      "saveButton": { "label": "Save", "data": ["show_seconds", "show_date"] }
+      "saveButton": {
+        "label": "Save",
+        "data": [
+          "show_seconds",
+          "show_date"
+        ]
+      }
     },
     {
       "id": "screensaver",
       "label": "Screensaver",
       "element": "section",
       "icon": "fa-moon-o",
-      "onSave": { "type": "controller", "endpoint": "system_hardware/sable", "method": "saveScreensaver" },
+      "onSave": {
+        "type": "controller",
+        "endpoint": "system_hardware/sable",
+        "method": "saveScreensaver"
+      },
       "content": [
-        { "id": "clock_after_s", "element": "input", "type": "number", "label": "Show clock after (seconds)", "value": 300,
-          "attributes": [{ "property": "min", "value": 0 }],
-          "description": "These apply in order while idle: show clock -> dim -> switch off. Time before a paused/idle now-playing screen falls to the clock (300 = 5 minutes). 0 = never." },
-        { "id": "dim_s", "element": "input", "type": "number", "label": "Dim after (seconds)", "value": 120,
-          "attributes": [{ "property": "min", "value": 0 }],
-          "description": "Idle time before the panel dims and starts shifting (burn-in protection) (120 = 2 minutes). 0 disables." },
-        { "id": "idle_s", "element": "input", "type": "number", "label": "Switch off after (seconds)", "value": 3600,
-          "attributes": [{ "property": "min", "value": 0 }],
-          "description": "Idle time before the panel fades to black (3600 = 1 hour). 0 = never." }
+        {
+          "id": "clock_after_s",
+          "element": "input",
+          "type": "number",
+          "label": "Show clock after (seconds)",
+          "value": 300,
+          "attributes": [
+            {
+              "property": "min",
+              "value": 0
+            }
+          ],
+          "description": "These apply in order while idle: show clock -> dim -> switch off. Time before a paused/idle now-playing screen falls to the clock (300 = 5 minutes). 0 = never."
+        },
+        {
+          "id": "dim_s",
+          "element": "input",
+          "type": "number",
+          "label": "Dim after (seconds)",
+          "value": 120,
+          "attributes": [
+            {
+              "property": "min",
+              "value": 0
+            }
+          ],
+          "description": "Idle time before the panel dims and starts shifting (burn-in protection) (120 = 2 minutes). 0 disables."
+        },
+        {
+          "id": "idle_s",
+          "element": "input",
+          "type": "number",
+          "label": "Switch off after (seconds)",
+          "value": 3600,
+          "attributes": [
+            {
+              "property": "min",
+              "value": 0
+            }
+          ],
+          "description": "Idle time before the panel fades to black (3600 = 1 hour). 0 = never."
+        }
       ],
-      "saveButton": { "label": "Save", "data": ["clock_after_s", "dim_s", "idle_s"] }
+      "saveButton": {
+        "label": "Save",
+        "data": [
+          "clock_after_s",
+          "dim_s",
+          "idle_s"
+        ]
+      }
     },
     {
       "id": "controls",
       "label": "Controls",
       "element": "section",
       "icon": "fa-gamepad",
-      "onSave": { "type": "controller", "endpoint": "system_hardware/sable", "method": "saveControls" },
+      "onSave": {
+        "type": "controller",
+        "endpoint": "system_hardware/sable",
+        "method": "saveControls"
+      },
       "content": [
-        { "id": "leds_enabled", "element": "switch", "label": "Buttons and LEDs", "value": true },
-        { "id": "ir_enabled", "element": "switch", "label": "IR remote", "value": true }
+        {
+          "id": "leds_enabled",
+          "element": "switch",
+          "label": "Buttons and LEDs",
+          "value": true
+        },
+        {
+          "id": "ir_enabled",
+          "element": "switch",
+          "label": "IR remote",
+          "value": true
+        }
       ],
-      "saveButton": { "label": "Save", "data": ["leds_enabled", "ir_enabled"] }
+      "saveButton": {
+        "label": "Save",
+        "data": [
+          "leds_enabled",
+          "ir_enabled"
+        ]
+      }
     },
     {
       "id": "ir_remote",
       "label": "IR Remote Profile",
       "element": "section",
       "icon": "fa-rss",
-      "onSave": { "type": "controller", "endpoint": "system_hardware/sable", "method": "saveIrProfile" },
+      "onSave": {
+        "type": "controller",
+        "endpoint": "system_hardware/sable",
+        "method": "saveIrProfile"
+      },
       "content": [
         {
           "id": "ir_profile",
           "element": "select",
           "label": "Remote profile",
           "description": "Pick the LIRC profile that matches your IR remote. Saving copies it to /etc/lirc and restarts lircd. Default: Xiaomi IR for TV box. Options are read from the bundled profile library.",
-          "value": { "value": "Xiaomi IR for TV box", "label": "Xiaomi IR for TV box" },
+          "value": {
+            "value": "Xiaomi IR for TV box",
+            "label": "Xiaomi IR for TV box"
+          },
           "options": []
         },
-        { "id": "ir_gpio_pin", "element": "input", "type": "number", "label": "IR receiver GPIO pin (BCM)",
-          "attributes": [{ "property": "min", "value": 0 }, { "property": "max", "value": 27 }],
+        {
+          "id": "ir_gpio_pin",
+          "element": "input",
+          "type": "number",
+          "label": "IR receiver GPIO pin (BCM)",
+          "attributes": [
+            {
+              "property": "min",
+              "value": 0
+            },
+            {
+              "property": "max",
+              "value": 27
+            }
+          ],
           "value": 4,
-          "description": "BCM pin the IR receiver is wired to (default 4, the standard Quadify wiring). Saving rewrites the gpio-ir line in /boot/userconfig.txt -- requires a reboot to take effect." }
+          "description": "BCM pin the IR receiver is wired to (default 4, the standard Quadify wiring). Saving rewrites the gpio-ir line in /boot/userconfig.txt -- requires a reboot to take effect."
+        }
       ],
-      "saveButton": { "label": "Save", "data": ["ir_profile", "ir_gpio_pin"] }
+      "saveButton": {
+        "label": "Save",
+        "data": [
+          "ir_profile",
+          "ir_gpio_pin"
+        ]
+      }
+    },
+    {
+      "id": "button_mapping",
+      "label": "Button Assignment",
+      "element": "section",
+      "icon": "fa-gamepad",
+      "onSave": {
+        "type": "controller",
+        "endpoint": "system_hardware/sable",
+        "method": "saveButtonsConfig"
+      },
+      "content": [
+        {
+          "id": "btn1_action",
+          "element": "select",
+          "label": "Button 1 Action",
+          "value": {
+            "value": "play",
+            "label": "Play"
+          },
+          "options": [
+            {
+              "value": "play",
+              "label": "Play"
+            },
+            {
+              "value": "pause",
+              "label": "Pause"
+            },
+            {
+              "value": "toggle",
+              "label": "Play / Pause Toggle"
+            },
+            {
+              "value": "next",
+              "label": "Next Track"
+            },
+            {
+              "value": "previous",
+              "label": "Previous Track"
+            },
+            {
+              "value": "random",
+              "label": "Toggle Random / Shuffle"
+            },
+            {
+              "value": "repeat",
+              "label": "Toggle Repeat"
+            },
+            {
+              "value": "menu",
+              "label": "Open Menu"
+            },
+            {
+              "value": "home",
+              "label": "Go Home"
+            },
+            {
+              "value": "play_uri",
+              "label": "Play Stream / URI"
+            },
+            {
+              "value": "play_playlist",
+              "label": "Play Playlist"
+            },
+            {
+              "value": "none",
+              "label": "Disabled (None)"
+            }
+          ]
+        },
+        {
+          "id": "btn1_arg",
+          "element": "input",
+          "type": "text",
+          "label": "Button 1 Argument (URI / Playlist Name)",
+          "value": "",
+          "description": "Optional argument for Button 1 when action is set to 'Play Stream / URI' or 'Play Playlist'."
+        },
+        {
+          "id": "btn2_action",
+          "element": "select",
+          "label": "Button 2 Action",
+          "value": {
+            "value": "pause",
+            "label": "Pause"
+          },
+          "options": [
+            {
+              "value": "play",
+              "label": "Play"
+            },
+            {
+              "value": "pause",
+              "label": "Pause"
+            },
+            {
+              "value": "toggle",
+              "label": "Play / Pause Toggle"
+            },
+            {
+              "value": "next",
+              "label": "Next Track"
+            },
+            {
+              "value": "previous",
+              "label": "Previous Track"
+            },
+            {
+              "value": "random",
+              "label": "Toggle Random / Shuffle"
+            },
+            {
+              "value": "repeat",
+              "label": "Toggle Repeat"
+            },
+            {
+              "value": "menu",
+              "label": "Open Menu"
+            },
+            {
+              "value": "home",
+              "label": "Go Home"
+            },
+            {
+              "value": "play_uri",
+              "label": "Play Stream / URI"
+            },
+            {
+              "value": "play_playlist",
+              "label": "Play Playlist"
+            },
+            {
+              "value": "none",
+              "label": "Disabled (None)"
+            }
+          ]
+        },
+        {
+          "id": "btn2_arg",
+          "element": "input",
+          "type": "text",
+          "label": "Button 2 Argument (URI / Playlist Name)",
+          "value": "",
+          "description": "Optional argument for Button 2 when action is set to 'Play Stream / URI' or 'Play Playlist'."
+        },
+        {
+          "id": "btn3_action",
+          "element": "select",
+          "label": "Button 3 Action",
+          "value": {
+            "value": "previous",
+            "label": "Previous Track"
+          },
+          "options": [
+            {
+              "value": "play",
+              "label": "Play"
+            },
+            {
+              "value": "pause",
+              "label": "Pause"
+            },
+            {
+              "value": "toggle",
+              "label": "Play / Pause Toggle"
+            },
+            {
+              "value": "next",
+              "label": "Next Track"
+            },
+            {
+              "value": "previous",
+              "label": "Previous Track"
+            },
+            {
+              "value": "random",
+              "label": "Toggle Random / Shuffle"
+            },
+            {
+              "value": "repeat",
+              "label": "Toggle Repeat"
+            },
+            {
+              "value": "menu",
+              "label": "Open Menu"
+            },
+            {
+              "value": "home",
+              "label": "Go Home"
+            },
+            {
+              "value": "play_uri",
+              "label": "Play Stream / URI"
+            },
+            {
+              "value": "play_playlist",
+              "label": "Play Playlist"
+            },
+            {
+              "value": "none",
+              "label": "Disabled (None)"
+            }
+          ]
+        },
+        {
+          "id": "btn3_arg",
+          "element": "input",
+          "type": "text",
+          "label": "Button 3 Argument (URI / Playlist Name)",
+          "value": "",
+          "description": "Optional argument for Button 3 when action is set to 'Play Stream / URI' or 'Play Playlist'."
+        },
+        {
+          "id": "btn4_action",
+          "element": "select",
+          "label": "Button 4 Action",
+          "value": {
+            "value": "next",
+            "label": "Next Track"
+          },
+          "options": [
+            {
+              "value": "play",
+              "label": "Play"
+            },
+            {
+              "value": "pause",
+              "label": "Pause"
+            },
+            {
+              "value": "toggle",
+              "label": "Play / Pause Toggle"
+            },
+            {
+              "value": "next",
+              "label": "Next Track"
+            },
+            {
+              "value": "previous",
+              "label": "Previous Track"
+            },
+            {
+              "value": "random",
+              "label": "Toggle Random / Shuffle"
+            },
+            {
+              "value": "repeat",
+              "label": "Toggle Repeat"
+            },
+            {
+              "value": "menu",
+              "label": "Open Menu"
+            },
+            {
+              "value": "home",
+              "label": "Go Home"
+            },
+            {
+              "value": "play_uri",
+              "label": "Play Stream / URI"
+            },
+            {
+              "value": "play_playlist",
+              "label": "Play Playlist"
+            },
+            {
+              "value": "none",
+              "label": "Disabled (None)"
+            }
+          ]
+        },
+        {
+          "id": "btn4_arg",
+          "element": "input",
+          "type": "text",
+          "label": "Button 4 Argument (URI / Playlist Name)",
+          "value": "",
+          "description": "Optional argument for Button 4 when action is set to 'Play Stream / URI' or 'Play Playlist'."
+        },
+        {
+          "id": "btn5_action",
+          "element": "select",
+          "label": "Button 5 Action",
+          "value": {
+            "value": "random",
+            "label": "Toggle Random / Shuffle"
+          },
+          "options": [
+            {
+              "value": "play",
+              "label": "Play"
+            },
+            {
+              "value": "pause",
+              "label": "Pause"
+            },
+            {
+              "value": "toggle",
+              "label": "Play / Pause Toggle"
+            },
+            {
+              "value": "next",
+              "label": "Next Track"
+            },
+            {
+              "value": "previous",
+              "label": "Previous Track"
+            },
+            {
+              "value": "random",
+              "label": "Toggle Random / Shuffle"
+            },
+            {
+              "value": "repeat",
+              "label": "Toggle Repeat"
+            },
+            {
+              "value": "menu",
+              "label": "Open Menu"
+            },
+            {
+              "value": "home",
+              "label": "Go Home"
+            },
+            {
+              "value": "play_uri",
+              "label": "Play Stream / URI"
+            },
+            {
+              "value": "play_playlist",
+              "label": "Play Playlist"
+            },
+            {
+              "value": "none",
+              "label": "Disabled (None)"
+            }
+          ]
+        },
+        {
+          "id": "btn5_arg",
+          "element": "input",
+          "type": "text",
+          "label": "Button 5 Argument (URI / Playlist Name)",
+          "value": "",
+          "description": "Optional argument for Button 5 when action is set to 'Play Stream / URI' or 'Play Playlist'."
+        },
+        {
+          "id": "btn6_action",
+          "element": "select",
+          "label": "Button 6 Action",
+          "value": {
+            "value": "repeat",
+            "label": "Toggle Repeat"
+          },
+          "options": [
+            {
+              "value": "play",
+              "label": "Play"
+            },
+            {
+              "value": "pause",
+              "label": "Pause"
+            },
+            {
+              "value": "toggle",
+              "label": "Play / Pause Toggle"
+            },
+            {
+              "value": "next",
+              "label": "Next Track"
+            },
+            {
+              "value": "previous",
+              "label": "Previous Track"
+            },
+            {
+              "value": "random",
+              "label": "Toggle Random / Shuffle"
+            },
+            {
+              "value": "repeat",
+              "label": "Toggle Repeat"
+            },
+            {
+              "value": "menu",
+              "label": "Open Menu"
+            },
+            {
+              "value": "home",
+              "label": "Go Home"
+            },
+            {
+              "value": "play_uri",
+              "label": "Play Stream / URI"
+            },
+            {
+              "value": "play_playlist",
+              "label": "Play Playlist"
+            },
+            {
+              "value": "none",
+              "label": "Disabled (None)"
+            }
+          ]
+        },
+        {
+          "id": "btn6_arg",
+          "element": "input",
+          "type": "text",
+          "label": "Button 6 Argument (URI / Playlist Name)",
+          "value": "",
+          "description": "Optional argument for Button 6 when action is set to 'Play Stream / URI' or 'Play Playlist'."
+        },
+        {
+          "id": "btn7_action",
+          "element": "select",
+          "label": "Button 7 Action",
+          "value": {
+            "value": "none",
+            "label": "Disabled (None)"
+          },
+          "options": [
+            {
+              "value": "play",
+              "label": "Play"
+            },
+            {
+              "value": "pause",
+              "label": "Pause"
+            },
+            {
+              "value": "toggle",
+              "label": "Play / Pause Toggle"
+            },
+            {
+              "value": "next",
+              "label": "Next Track"
+            },
+            {
+              "value": "previous",
+              "label": "Previous Track"
+            },
+            {
+              "value": "random",
+              "label": "Toggle Random / Shuffle"
+            },
+            {
+              "value": "repeat",
+              "label": "Toggle Repeat"
+            },
+            {
+              "value": "menu",
+              "label": "Open Menu"
+            },
+            {
+              "value": "home",
+              "label": "Go Home"
+            },
+            {
+              "value": "play_uri",
+              "label": "Play Stream / URI"
+            },
+            {
+              "value": "play_playlist",
+              "label": "Play Playlist"
+            },
+            {
+              "value": "none",
+              "label": "Disabled (None)"
+            }
+          ]
+        },
+        {
+          "id": "btn7_arg",
+          "element": "input",
+          "type": "text",
+          "label": "Button 7 Argument (URI / Playlist Name)",
+          "value": "",
+          "description": "Optional argument for Button 7 when action is set to 'Play Stream / URI' or 'Play Playlist'."
+        },
+        {
+          "id": "btn8_action",
+          "element": "select",
+          "label": "Button 8 Action",
+          "value": {
+            "value": "none",
+            "label": "Disabled (None)"
+          },
+          "options": [
+            {
+              "value": "play",
+              "label": "Play"
+            },
+            {
+              "value": "pause",
+              "label": "Pause"
+            },
+            {
+              "value": "toggle",
+              "label": "Play / Pause Toggle"
+            },
+            {
+              "value": "next",
+              "label": "Next Track"
+            },
+            {
+              "value": "previous",
+              "label": "Previous Track"
+            },
+            {
+              "value": "random",
+              "label": "Toggle Random / Shuffle"
+            },
+            {
+              "value": "repeat",
+              "label": "Toggle Repeat"
+            },
+            {
+              "value": "menu",
+              "label": "Open Menu"
+            },
+            {
+              "value": "home",
+              "label": "Go Home"
+            },
+            {
+              "value": "play_uri",
+              "label": "Play Stream / URI"
+            },
+            {
+              "value": "play_playlist",
+              "label": "Play Playlist"
+            },
+            {
+              "value": "none",
+              "label": "Disabled (None)"
+            }
+          ]
+        },
+        {
+          "id": "btn8_arg",
+          "element": "input",
+          "type": "text",
+          "label": "Button 8 Argument (URI / Playlist Name)",
+          "value": "",
+          "description": "Optional argument for Button 8 when action is set to 'Play Stream / URI' or 'Play Playlist'."
+        }
+      ],
+      "saveButton": {
+        "label": "Save",
+        "data": [
+          "btn1_action",
+          "btn1_arg",
+          "btn2_action",
+          "btn2_arg",
+          "btn3_action",
+          "btn3_arg",
+          "btn4_action",
+          "btn4_arg",
+          "btn5_action",
+          "btn5_arg",
+          "btn6_action",
+          "btn6_arg",
+          "btn7_action",
+          "btn7_arg",
+          "btn8_action",
+          "btn8_arg"
+        ]
+      }
     },
     {
       "id": "actions",
@@ -150,7 +907,11 @@
           "onClick": {
             "type": "emit",
             "message": "callMethod",
-            "data": { "endpoint": "system_hardware/sable", "method": "reloadSable", "data": "" }
+            "data": {
+              "endpoint": "system_hardware/sable",
+              "method": "reloadSable",
+              "data": ""
+            }
           }
         },
         {
@@ -160,7 +921,11 @@
           "onClick": {
             "type": "emit",
             "message": "callMethod",
-            "data": { "endpoint": "system_hardware/sable", "method": "restartSable", "data": "" }
+            "data": {
+              "endpoint": "system_hardware/sable",
+              "method": "restartSable",
+              "data": ""
+            }
           }
         }
       ]
