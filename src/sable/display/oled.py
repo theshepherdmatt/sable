@@ -87,7 +87,6 @@ class OledDisplay(Display):
             g.setmode(g.BCM)
             g.setup(self._pins.blank, g.OUT)
             g.output(self._pins.blank, g.LOW)
-            time.sleep(1.0)
             g.cleanup()
         except Exception:
             pass

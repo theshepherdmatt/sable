@@ -43,11 +43,8 @@ def _timedatectl_synced():
 
 def is_synced():
     for probe in (_ntpq_synced, _timedatectl_synced):
-        result = probe()
-        if result is True:
+        if probe() is True:
             return True
-        if result is False:
-            return False
     return time.localtime().tm_year >= 2024
 
 

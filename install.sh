@@ -201,6 +201,20 @@ $SUDO systemctl daemon-reload
 $SUDO systemctl enable sable.service >/dev/null 2>&1 || true
 $SUDO systemctl enable sable-boot-splash.service >/dev/null 2>&1 || true
 
+# 5b. Install Sable Radio Volumio plugin --------------------------------------
+SABLERADIO_DIR="/data/plugins/music_service/sableradio"
+log "installing Sable Radio plugin ($SABLERADIO_DIR) ..."
+if [ -d "$SABLERADIO_DIR/.git" ]; then
+    (cd "$SABLERADIO_DIR" && $SUDO git pull --quiet) || warn "git pull failed for sableradio"
+else
+    $SUDO rm -rf "$SABLERADIO_DIR"
+    $SUDO git clone --quiet https://github.com/theshepherdmatt/sableradio.git "$SABLERADIO_DIR" || warn "git clone failed for sableradio"
+fi
+if [ -d "$SABLERADIO_DIR" ]; then
+    $SUDO chown -R volumio:volumio "$SABLERADIO_DIR"
+    log "installed Sable Radio plugin to $SABLERADIO_DIR"
+fi
+
 echo
 log "DONE. Nothing was started or rebooted."
 log "Verify Volumio is still healthy, then:  sudo reboot"

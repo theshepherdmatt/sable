@@ -49,11 +49,12 @@ def main():
             display.present(img)
             time.sleep(0.15)
     finally:
+        # Handoff to sable.service: do not call display.cleanup() (which pulls
+        # GPIO25 LOW and sleeps 1s, fighting sable.service's display init).
         try:
             display.sleep()
         except Exception:
             pass
-        display.cleanup()
 
 
 if __name__ == "__main__":
