@@ -61,6 +61,20 @@ class RotaryEncoder:
         self._decoder = QuadratureDecoder()
         self._last_detent = 0.0
         self._reverse = getattr(pins, "reverse", False)
+        # Sampling and dispatch are SEPARATE threads.
+        #
+        # The callbacks used to run inline in the polling loop, and they are not
+        # cheap: a scroll on the now-playing screen sends volume commands over
+        # socket.io and then repaints the panel over SPI (~16ms for a full
+        # frame). At a 1ms sample interval that stalls sampling for tens of
+        # polls, and quadrature edges that occur meanwhile are gone for good --
+        # felt as detents that do nothing, and as a decoder left mid-sequence
+        # so the NEXT detent is wrong too ("sticking"). The sampling loop must
+        # do nothing but read pins and decode.
+        self._scroll_acc = 0
+        self._acc_lock = None      # created in start(), needs threading
+        self._wake = None
+        self._buttons = []
 
     def start(self):
         import RPi.GPIO as GPIO
@@ -70,10 +84,16 @@ class RotaryEncoder:
         GPIO.setmode(GPIO.BCM)
         for pin in (self.pins.clk, self.pins.dt, self.pins.sw):
             GPIO.setup(pin, GPIO.IN, pull_up_down=GPIO.PUD_UP)
+        self._acc_lock = threading.Lock()
+        self._wake = threading.Event()
         self._running = True
-        threading.Thread(target=self._loop, daemon=True, name="sable-rotary").start()
+        threading.Thread(target=self._loop, daemon=True,
+                         name="sable-rotary").start()
+        threading.Thread(target=self._dispatch, daemon=True,
+                         name="sable-rotary-dispatch").start()
 
     def _loop(self):
+        """SAMPLING ONLY. Never calls a callback -- see __init__."""
         g = self._GPIO
         press_started = None
         import os
@@ -91,18 +111,47 @@ class RotaryEncoder:
                 if _dbg:
                     print("ROTARY step=%+d gap=%.3fs mult=%d rev=%d emit=%+d"
                           % (step, gap, mult, self._reverse, emit), flush=True)
-                self.on_scroll(emit)
+                with self._acc_lock:
+                    self._scroll_acc += emit
+                self._wake.set()
             pressed = g.input(self.pins.sw) == 0
             if pressed and press_started is None:
                 press_started = time.monotonic()
             elif not pressed and press_started is not None:
                 held = time.monotonic() - press_started
                 press_started = None
-                if held >= self.pins.long_press_s:
-                    self.on_long_press()
-                else:
-                    self.on_select()
+                self._buttons.append("long" if held >= self.pins.long_press_s
+                                     else "select")
+                self._wake.set()
             time.sleep(self.poll_s)
+
+    def _dispatch(self):
+        """Runs the callbacks off the sampling thread, and COALESCES.
+
+        Draining the accumulator means a fast spin becomes one on_scroll(+7)
+        rather than seven separate calls each doing its own socket round-trip
+        and repaint. That is what makes a quick twist land as one smooth move
+        instead of a queue of updates arriving after you have stopped turning.
+        """
+        while self._running:
+            self._wake.wait(0.2)
+            self._wake.clear()
+            with self._acc_lock:
+                delta, self._scroll_acc = self._scroll_acc, 0
+            if delta:
+                try:
+                    self.on_scroll(delta)
+                except Exception:
+                    pass
+            while self._buttons:
+                which = self._buttons.pop(0)
+                try:
+                    if which == "long":
+                        self.on_long_press()
+                    else:
+                        self.on_select()
+                except Exception:
+                    pass
 
     def stop(self):
         self._running = False

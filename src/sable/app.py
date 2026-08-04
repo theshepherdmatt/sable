@@ -417,10 +417,20 @@ class App:
         self.note_activity()
         delta = int(delta or 0)
         if self.listener is not None and delta:
-            # Honour the turn magnitude: a fast spin (rotary acceleration, |delta|
-            # up to 4) moves the volume that many steps instead of a single tick,
-            # so you are not cranking the knob forever. Capped so a runaway value
-            # can't spam the mixer.
+            # Deliberately RELATIVE, not one absolute set.
+            #
+            # An absolute set would be a single message per gesture instead of
+            # up to 10, which is tempting for responsiveness -- but it has to be
+            # based on a current volume, and store.volume is not reliably that:
+            # Volumio pushes transient values mid-track (observed vol=85
+            # immediately followed by vol=0 on the same track). Re-basing on one
+            # of those would jump the volume hard in whichever direction the bad
+            # reading pointed. A relative nudge can only ever be one step out.
+            #
+            # The responsiveness fix lives in the rotary driver instead, where
+            # the cost actually was: sampling no longer blocks on this call, and
+            # a fast spin arrives as ONE coalesced delta rather than one
+            # callback (and one repaint) per detent.
             sign = "+" if delta > 0 else "-"
             for _ in range(min(abs(delta), 10)):
                 self.listener.set_volume(sign)
@@ -1088,11 +1098,16 @@ def run_hardware(stage="clock", rotate=None, contrast=None,
                 log("boot gate: timed out (clock=%s volumio=%s) -- continuing"
                     % (synced, ready))
                 break
-            # Name what we are actually waiting on, so a slow boot looks like
-            # progress rather than a hang. The player's name is the platform's,
-            # not always "volumio" -- on moOde this same wait is for mpd.
+            # The clock wait is BY FAR the longest phase -- measured ~34s of a
+            # ~36s splash on this box, because ntpd is slower to discipline the
+            # clock than Volumio is to come up. Naming it ("setting the clock")
+            # meant that one technical message owned almost the whole boot, so
+            # the generic reassurance is the right thing there. The player wait
+            # is short and worth naming, since that IS the interesting holdup
+            # when it happens -- and the name is the platform's, not always
+            # "volumio": on moOde this same wait is for mpd.
             waiting_for = "moode" if _platform() == "moode" else "volumio"
-            _splash("setting the clock" if not synced
+            _splash("starting up" if not synced
                     else "waiting for %s" % waiting_for)
             time.sleep(0.5)
         log("boot gate: clock=%s volumio=%s" % (synced, _volumio_ready()))
