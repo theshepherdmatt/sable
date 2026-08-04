@@ -120,6 +120,7 @@ LED_NEXT = 3
 LED_SHUFFLE = 4
 LED_REPEAT = 5
 LED_SPARE = 6
+LED_SPARE2 = 7
 
 
 def led_byte(mask, mcp=None):
@@ -129,9 +130,8 @@ def led_byte(mask, mcp=None):
     reversed (mcp.led_reverse), the 8 LED lines run end-to-end backwards, so
     logical bit b physically lands on LED (8-b) -- play/pause appear at the
     bottom. Pre-reversing the byte across all 8 bits cancels that: play (bit 0)
-    goes out as bit 7 and lands back on LED 1. The power LED (bit 7, never driven
-    by software) is left alone either way. This is the LED analogue of the
-    button matrix's swap_columns.
+    goes out as bit 7 and lands back on LED 1 (and bit 7 back to LED 8). This is
+    the LED analogue of the button matrix's swap_columns.
     """
     mcp = MCP if mcp is None else mcp
     if not getattr(mcp, "led_reverse", False):

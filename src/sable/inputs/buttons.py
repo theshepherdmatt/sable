@@ -4,10 +4,11 @@ presses go through the SAME app.handle as the rotary/IR (one command vocabulary)
 and the play/pause LED follows Sable's live StateStore (instant) instead of
 shelling out to `volumio status` every 2 seconds.
 
-Hardware contract (hardware.MCP): GPIOA = 7 LEDs (bits 0-6, one lit at a time);
+Hardware contract (hardware.MCP): GPIOA = 8 LEDs (bits 0-7, one lit at a time);
 GPIOB = a 2-col x 4-row button matrix (B0/B1 drive the columns, B2-B7 read the
-rows with pull-ups). Button 8 + its LED are the unit's HARDWARE power and are
-left entirely alone (never scanned, never driven).
+rows with pull-ups). Button 8 + LED 8 are software-controlled like the rest on
+this unit (the older Evo build reserved them for a hardware power button/LED --
+not the case here).
 
 All MCP bus access is serialized on one lock (scan reads GPIOB; LED writes go to
 GPIOA), since the scan loop, the state callback, and the feedback timer can all
@@ -27,16 +28,16 @@ LED_NEXT = 1 << 3
 LED_SHUFF = 1 << 4
 LED_REPEAT = 1 << 5
 LED_SPARE = 1 << 6
+LED_SPARE2 = 1 << 7
 
-# Boot "power on" sweep order across all seven LEDs.
-LED_SWEEP = [LED_PLAY, LED_PAUSE, LED_PREV, LED_NEXT, LED_SHUFF, LED_REPEAT, LED_SPARE]
+# Boot "power on" sweep order across all eight LEDs.
+LED_SWEEP = [LED_PLAY, LED_PAUSE, LED_PREV, LED_NEXT, LED_SHUFF, LED_REPEAT, LED_SPARE, LED_SPARE2]
 
 # AirPlay: Volumio reports status=play even when paused and gives no reliable
 # play/pause signal, so a status LED would lie -- show none for these services.
 _AIRPLAY_SERVICES = ("airplay", "airplay_emulation")
 
-# Panel button id -> (Sable command or None, feedback LED). Button 8 (power) is
-# hardware-only and never appears here.
+# Panel button id -> (Sable command or None, feedback LED).
 _BUTTON_ACTION = {
     1: ("play", LED_PLAY),
     2: ("pause", LED_PAUSE),
@@ -45,10 +46,16 @@ _BUTTON_ACTION = {
     5: ("random", LED_SHUFF),
     6: ("repeat", LED_REPEAT),
     7: (None, LED_SPARE),
-    8: (None, 0),
+    8: ("shutdown", LED_SPARE2),
 }
 # Matrix layout: row -> [col0, col1] button ids (matches the proven wiring).
 _BUTTON_MAP = [[1, 2], [3, 4], [5, 6], [7, 8]]
+
+# Buttons whose action only fires after a hold (not a tap) -- a bare press-edge
+# is too easy to trigger by accident for something as hard to reverse as a full
+# poweroff. HOLD_S is how long GPIOB must read pressed before it fires.
+_HOLD_BUTTONS = {8}
+_HOLD_S = 2.0
 
 
 class ButtonsLeds:
@@ -68,8 +75,25 @@ class ButtonsLeds:
         self._hw_led = -1                # last byte written to GPIOA
         self._timer = None
         self._prev = [[1, 1], [1, 1], [1, 1], [1, 1]]
+        # Boot sweep gate: held until signal_ready() (wired to the Volumio/moOde
+        # listener's on_connect) or ready_timeout_s elapses, whichever first --
+        # the sweep becomes a real "system ready" indicator instead of firing
+        # the instant the MCP bus is up, well before Volumio has even connected.
+        # The timeout is a fallback so hardware bench-testing without a live
+        # Volumio backend still gets the sweep eventually.
+        self._ready = threading.Event()
+        self.ready_timeout_s = 20.0
+        # Hold-to-fire state for _HOLD_BUTTONS (see that constant) -- press time
+        # per currently-held hold-button, and whether it has already fired (so a
+        # long hold does not repeat-fire every scan tick past the threshold).
+        self._hold_start = {}
+        self._hold_fired = set()
 
     # --- lifecycle ---
+    def signal_ready(self):
+        """Release the boot sweep. Call from the listener's on_connect."""
+        self._ready.set()
+
     def start(self):
         import smbus2
         try:
@@ -156,14 +180,42 @@ class ButtonsLeds:
     def _scan_loop(self):
         while self._running:
             matrix = self._read_matrix()
+            now = time.monotonic()
             for r in range(4):
                 for c in range(2):
                     curr, prev = matrix[r][c], self._prev[r][c]
                     btn = _BUTTON_MAP[r][c]
-                    if curr == 0 and prev == 1:   # press edge (active-low)
+                    pressed = curr == 0            # active-low
+                    if btn in _HOLD_BUTTONS:
+                        self._scan_hold_button(btn, pressed, prev == 0, now)
+                    elif pressed and prev == 1:    # press edge -> fire immediately
                         self._on_press(btn)
                     self._prev[r][c] = curr
             time.sleep(self.debounce_s)
+
+    def _scan_hold_button(self, btn, pressed, was_pressed, now):
+        """Hold-to-fire: light the LED while held, fire the action once at
+        _HOLD_S, never re-fire while still held, reset cleanly on release
+        (fired or not -- a short tap does nothing but light+unlight the LED)."""
+        _, led = _BUTTON_ACTION.get(btn, (None, 0))
+        if pressed and not was_pressed:            # press edge: start timing
+            self._hold_start[btn] = now
+            self._hold_fired.discard(btn)
+            with self._lock:
+                self._ephemeral_led = led
+                self._write_leds_locked(led)
+        elif pressed and was_pressed:               # still held
+            started = self._hold_start.get(btn)
+            if (started is not None and btn not in self._hold_fired
+                    and now - started >= _HOLD_S):
+                self._hold_fired.add(btn)
+                self._on_press(btn)
+        elif not pressed and was_pressed:            # release edge: reset
+            self._hold_start.pop(btn, None)
+            self._hold_fired.discard(btn)
+            with self._lock:
+                self._ephemeral_led = 0
+                self._write_leds_locked(self._desired_led())
 
     def _read_matrix(self):
         res = [[1, 1], [1, 1], [1, 1], [1, 1]]
@@ -219,12 +271,16 @@ class ButtonsLeds:
     # a brightness breath), stopped/idle = all dark. A button press still flashes
     # its own LED for feedback, overriding the ticker for feedback_s.
     def _led_loop(self):
+        # Wait for Volumio (or the fallback timeout) before the "power on" sweep
+        # -- see signal_ready(). A dark panel during the wait is correct: it is
+        # not yet true that the system is ready.
+        self._ready.wait(timeout=self.ready_timeout_s)
         for led in LED_SWEEP:                       # boot "power on" sweep
             if not self._running:
                 return
             with self._lock:
                 self._write_leds_locked(led)
-            time.sleep(0.055)
+            time.sleep(0.15)  # was 0.055 -- too fast to register per-LED
         with self._lock:
             self._write_leds_locked(0)
         while self._running:

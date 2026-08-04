@@ -35,7 +35,9 @@ class MeterScreen(Screen):
         super().__init__(app)
         self.style = style
         self.bars = bars
-        self.reader = make_spectrum_reader(bars, log=app.log)
+        self.reader = make_spectrum_reader(
+            bars, log=app.log,
+            on_stuck=lambda: app.respawn_cava("spectrum screen stuck"))
         self.smoother = BarSmoother(bars, attack, decay)
         self.test_bars = None
         self._peaks = [0.0] * bars
@@ -96,6 +98,61 @@ class MeterScreen(Screen):
                                                  default="bars")
         return s if s in _STYLES else "bars"
 
+    def _columns(self):
+        """How many COLUMNS to draw. Deliberately independent of how many bands
+        the source emits: on Volumio cava's band count is ours to set, but on
+        moOde the spectrum comes from peppyalsa, whose frame is a fixed-width
+        binary struct we only read -- so the column count cannot come from the
+        source or the two platforms would have to look different. We resample
+        instead (see _resample), and this is purely a look setting."""
+        n = self.app.settings.get("display", "spectrum_columns", default=40)
+        try:
+            n = int(n)
+        except (TypeError, ValueError):
+            n = 40
+        return max(8, min(64, n))
+
+    @staticmethod
+    def _resample(vals, n):
+        """Linearly resample `vals` to exactly n columns.
+
+        Interpolating (rather than nearest-neighbour) matters: at 24 bands -> 40
+        columns, nearest would duplicate every other band and the meter would
+        read as uneven-width slabs -- visibly worse than the fat columns it
+        replaces. Interpolation keeps the envelope smooth across the panel."""
+        m = len(vals)
+        if m == 0 or n <= 0:
+            return []
+        if m == n:
+            return list(vals)
+        if m == 1:
+            return [vals[0]] * n
+        out = []
+        for i in range(n):
+            pos = i * (m - 1) / (n - 1) if n > 1 else 0.0
+            lo = int(pos)
+            hi = min(m - 1, lo + 1)
+            f = pos - lo
+            out.append(vals[lo] * (1.0 - f) + vals[hi] * f)
+        return out
+
+    @staticmethod
+    def _slots(w, n, gap=1):
+        """Yield (x0, x1) pixel spans for n columns across the full width w.
+
+        Uses a FLOAT pitch and rounds each edge instead of an integer bar width:
+        `bw = (w - (n+1)*gap) // n` truncates, and n times that truncation piles
+        up as dead space at the right edge (at 40 columns on a 256px panel it
+        loses ~16px, a visible bald patch). Rounding per column spreads the
+        remainder so the meter always spans the panel edge to edge."""
+        pitch = w / float(n)
+        for i in range(n):
+            x0 = int(round(i * pitch))
+            x1 = int(round((i + 1) * pitch)) - 1 - gap
+            if x1 < x0:
+                x1 = x0
+            yield x0, x1
+
     def _update_peaks(self, vals):
         if len(self._peaks) != len(vals):
             self._peaks = [0.0] * len(vals)
@@ -121,7 +178,13 @@ class MeterScreen(Screen):
     def render(self, canvas, draw, w, h):
         st = self.app.store.get()
         style = self._resolve_style()
+        # Smooth at the SOURCE's band count, then resample to display columns --
+        # not the other way round. Attack/decay applied to already-interpolated
+        # columns would smear energy sideways between neighbours as the envelope
+        # moves, which reads as a wobble rather than a rise and fall.
         vals = self.smoother.update(self._raw())
+        if vals and style in ("bars", "dots", "mirror"):
+            vals = self._resample(vals, self._columns())
         peaks = self._update_peaks(vals)
 
         if style == "vu":
@@ -144,19 +207,16 @@ class MeterScreen(Screen):
         top = self.TOP
         region = h - top
         n = len(vals)
-        gap = 1
-        bw = max(1, (w - (n + 1) * gap) // n)
-        x = gap
-        for i, v in enumerate(vals):
+        for i, (x, x1) in enumerate(self._slots(w, n)):
+            v = vals[i]
             bh = int(max(0.0, min(1.0, v)) * (region - 1))
             ytop = h - 1 - bh
-            x1 = x + bw - 1
             if dots:
                 if bh > 0:
                     draw.rectangle((x, max(top, ytop - 1), x1, min(h - 1, ytop + 1)),
                                    fill=235)
             else:
-                bar = self._vbar(bw, bh, 245, 110)
+                bar = self._vbar(x1 - x + 1, bh, 245, 110)
                 if bar is not None:
                     canvas.paste(bar, (x, ytop))
                     draw.line((x, ytop, x1, ytop), fill=255)      # bright crest
@@ -164,7 +224,6 @@ class MeterScreen(Screen):
             if pkh > bh + 1:
                 pky = h - 1 - pkh
                 draw.line((x, pky, x1, pky), fill=175)            # falling peak cap
-            x += bw + gap
 
     def _render_mirror(self, canvas, draw, w, h, vals, peaks):
         top = self.TOP
@@ -172,12 +231,10 @@ class MeterScreen(Screen):
         mid = top + region // 2
         half = region // 2 - 1
         n = len(vals)
-        gap = 1
-        bw = max(1, (w - (n + 1) * gap) // n)
-        x = gap
-        for i, v in enumerate(vals):
+        for i, (x, x1) in enumerate(self._slots(w, n)):
+            v = vals[i]
+            bw = x1 - x + 1
             bh = int(max(0.0, min(1.0, v)) * half)
-            x1 = x + bw - 1
             if bh > 0:
                 up = self._vbar(bw, bh, 130, 235)        # dim tip -> bright centre
                 canvas.paste(up, (x, mid - bh))
@@ -187,7 +244,6 @@ class MeterScreen(Screen):
                 draw.line((x, mid + bh, x1, mid + bh), fill=255)
             else:
                 draw.line((x, mid, x1, mid), fill=90)     # quiet baseline
-            x += bw + gap
 
     def _render_ribbon(self, canvas, draw, w, h, vals):
         top = self.TOP

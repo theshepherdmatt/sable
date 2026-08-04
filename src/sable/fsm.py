@@ -40,6 +40,18 @@ class FSM:
         self.menu_inactivity_s = menu_inactivity_s
 
     def go(self, name, **kwargs):
+        # Power-off latch: once App.begin_shutdown() has run, the shutdown
+        # message is the last thing the panel shows.
+        #
+        # Today nothing actually tries to leave it -- TABLE has no "shutdown"
+        # row so dispatch() can't move off it, and reconcile_screen only acts on
+        # clock/modern/spectrum. This makes that an INVARIANT rather than an
+        # accident of the current table: adding a "shutdown" row later, or
+        # widening reconcile_screen, would otherwise let the clock replace the
+        # message mid-power-off. It lives here, not in App.go, because
+        # dispatch() calls this directly and would bypass an App-level guard.
+        if getattr(self.app, "_shutdown_started", False) and name != "shutdown":
+            return
         target = self.screens[name]
         with self._lock:
             prev = self.current

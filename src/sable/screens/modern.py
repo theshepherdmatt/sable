@@ -1,7 +1,7 @@
 """The hero now-playing screen ("Panel").
 
-Greyscale album art, full panel height, BLEEDS (via a short fade) into a text
-field with a clear type hierarchy: white title, grey artist, dim meta. A DIM live
+Greyscale album art, full panel height, hard-edged into a text field with a
+clear type hierarchy: white title, grey artist, dim meta. A DIM live
 spectrum floor along the bottom turns this into now-playing-AND-spectrum without a
 mode switch -- drawn only when the source actually feeds CAVA, so non-MPD sources
 just omit it rather than show a flat line. Paused is a DESIGNED state (dimmed art +
@@ -17,11 +17,6 @@ from PIL import Image
 
 from .base import Screen
 from ..display.fifo_meter import BarSmoother, make_spectrum_reader
-
-
-def _mmss(seconds):
-    seconds = max(0, int(seconds))
-    return "%d:%02d" % (seconds // 60, seconds % 60)
 
 
 # Volumio `service` -> a short, panel-legible SOURCE tag. Brand logos do not
@@ -60,6 +55,7 @@ class ModernScreen(Screen):
         self._smoother = BarSmoother(self.FLOOR_BARS, attack=0.6, decay=0.12)
         self._test_floor = None     # injected for headless proof renders
         self._scrim = None          # cached Cinema bottom-up darkening scrim
+        self._level_peaks = [0.0, 0.0]  # lo/hi peak-hold for the level bars
 
     def feed_floor(self, bars):
         self._test_floor = list(bars)
@@ -100,7 +96,6 @@ class ModernScreen(Screen):
             if paused:
                 a = a.point(lambda p: int(p * 0.45))
             canvas.paste(a, (0, 0))
-            self._bleed(canvas, a, aw, h)
         else:
             self._draw_art_placeholder(canvas, draw, aw, h, dim=paused)
 
@@ -140,8 +135,7 @@ class ModernScreen(Screen):
         vw = self.text_width(draw, vol, meta_f)
         self.text(canvas, (w - vw - 2, iy + 1), vol, meta_f, fill=100)
 
-        # --- refined progress + remaining time ---
-        self._render_progress(canvas, draw, tx, w, h, st)
+
 
     # --- helpers ---
     @staticmethod
@@ -176,30 +170,25 @@ class ModernScreen(Screen):
             return head.strip(), tail.strip()
         return title, sub
 
-    def _bleed(self, canvas, art, aw, h):
-        """Fade the art's right edge into black so it dissolves into the text
-        field instead of hard-cutting."""
-        strip = Image.new("L", (self.FADE, h), 0)
-        sp = strip.load()
-        ap = art.load()
-        for y in range(h):
-            edge = ap[aw - 1, y]
-            for x in range(self.FADE):
-                sp[x, y] = int(edge * (1 - (x + 1) / (self.FADE + 1)))
-        canvas.paste(strip, (aw, 0))
-
     def _floor_values(self):
         if self._test_floor is not None:
             return self._smoother.update(self._test_floor)
         if self._reader is None:
-            self._reader = make_spectrum_reader(self.FLOOR_BARS, log=self.app.log)
+            self._reader = make_spectrum_reader(
+                self.FLOOR_BARS, log=self.app.log,
+                on_stuck=lambda: self.app.respawn_cava("now-playing floor bars stuck"))
         return self._smoother.update(self._reader.read())
 
+    LEVEL_BAR_H = 4             # px, each bar (was 2 -- thin/flat before)
+    LEVEL_BAR_GAP = 6           # px between the two bars' top edges
+
     def _render_level_bars(self, canvas, draw, tx, w, h):
-        """Two thin horizontal level bars in the bottom strip -- low-band and
-        high-band energy of the live spectrum -- each pulsing OUT from the centre
-        with a bright-centre gradient. Replaces the old vertical spectrum floor:
-        same data, a calmer/cleaner 'stereo VU' feel."""
+        """Two chunky horizontal level bars in the bottom strip -- low-band and
+        high-band energy of the live spectrum -- growing left-to-right from a
+        zero baseline. Each bar has a top-bright/bottom-dim bevel for a chunky
+        LED-block feel instead of a flat line, plus a peak-hold tick (bright
+        marker that catches the highest recent level and decays back) so a
+        transient hit registers even between smoothed frames."""
         vals = self._floor_values()
         n = len(vals)
         if n == 0:
@@ -208,42 +197,30 @@ class ModernScreen(Screen):
         lo = sum(vals[:half]) / half
         hi = sum(vals[half:]) / max(1, n - half)
         x0, x1 = tx, w - 3
-        cx = (x0 + x1) // 2
-        halfw = max(1, (x1 - x0) // 2)
+        width = max(1, x1 - x0)
+        bh = self.LEVEL_BAR_H
         px = canvas.load()
+        base_y = 47
         for i, lvl in enumerate((lo, hi)):
-            by = 49 + i * 5                                # two 2px bars, y49 + y54
-            draw.line((x0, by, x1, by), fill=32)          # dim full-width track
-            draw.line((x0, by + 1, x1, by + 1), fill=20)
-            ext = int(halfw * max(0.0, min(1.0, lvl)))
+            lvl = max(0.0, min(1.0, lvl))
+            by = base_y + i * (bh + self.LEVEL_BAR_GAP)
+            for dy in range(bh):
+                draw.line((x0, by + dy, x1, by + dy), fill=28 - dy * 3)  # dim track, bevelled
+            ext = int(width * lvl)
+            # peak-hold: snap up instantly, decay slowly, drawn only while it
+            # leads the live bar (otherwise the live fill already covers it).
+            peak = self._level_peaks[i]
+            peak = lvl if lvl >= peak else max(lvl, peak - 0.015)
+            self._level_peaks[i] = peak
+            peak_ext = int(width * peak)
             for dx in range(ext + 1):
-                g = max(80, int(248 - 150 * dx / halfw))  # bright centre -> dim tips
-                px[cx - dx, by] = g
-                px[cx + dx, by] = g
-                px[cx - dx, by + 1] = max(60, g - 50)      # dimmer 2nd row -> depth
-                px[cx + dx, by + 1] = max(60, g - 50)
-
-    def _render_progress(self, canvas, draw, tx, w, h, st):
-        # A QUIET position line along the very bottom edge -- the panel's "floor",
-        # not a third competing bar above the level meters. A live stream has no
-        # position, so it shows a LIVE badge instead of a (meaningless) timer.
-        f = self.app.fonts.get("sans", 8)
-        py = h - 1
-        if bool(st.stream) or st.duration_s <= 0:
-            label = "LIVE"
-            tw = self.text_width(draw, label, f)
-            draw.ellipse((w - tw - 12, py - 6, w - tw - 8, py - 2), fill=210)  # dot
-            self.text(canvas, (w - 2, h - 9), label, f, fill=175, anchor="ra")
-            draw.line((tx, py, w - tw - 16, py), fill=24)                       # baseline
-            return
-        label = "-" + _mmss(st.duration_s - self.app.store.live_position_ms() / 1000.0)
-        tw = self.text_width(draw, label, f)
-        self.text(canvas, (w - 2, h - 9), label, f, fill=120, anchor="ra")
-        right = w - tw - 6
-        draw.line((tx, py, right, py), fill=24)
-        fillw = int(max(0, right - tx) * self.app.store.progress_fraction())
-        if fillw > 0:
-            draw.line((tx, py, tx + fillw, py), fill=150)
+                for dy in range(bh):
+                    top_bias = 1.0 - dy / max(1, bh - 1)          # 1.0 top -> 0.0 bottom
+                    g = int((100 + 148 * dx / width) * (0.55 + 0.45 * top_bias))
+                    px[x0 + dx, by + dy] = min(255, max(60, g))
+            if peak_ext > ext:                                     # falling peak cap
+                for dy in range(bh):
+                    px[x0 + peak_ext, by + dy] = 255
 
     def _render_paused(self, canvas, draw, tx, w, h, st):
         py = 39

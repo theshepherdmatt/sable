@@ -131,6 +131,8 @@ Cmnd_Alias SABLE_CMDS = /bin/cp /home/volumio/sable/config/lirc/profiles/*/lircd
                          /bin/systemctl start sable.service, \
                          /bin/systemctl stop sable.service, \
                          /bin/systemctl restart sable.service, \
+                         /bin/systemctl poweroff, \
+                         /sbin/poweroff, \
                          /usr/local/bin/sable-set-ir-pin.sh *
 volumio ALL=(ALL) NOPASSWD: SABLE_CMDS
 EOF
@@ -199,7 +201,22 @@ log "installing $BOOT_UNIT_DST"
 $SUDO tee "$BOOT_UNIT_DST" < "$BOOT_UNIT_SRC" >/dev/null
 $SUDO systemctl daemon-reload
 $SUDO systemctl enable sable.service >/dev/null 2>&1 || true
-$SUDO systemctl enable sable-boot-splash.service >/dev/null 2>&1 || true
+# sable-boot-splash is installed but deliberately NOT enabled, and is actively
+# disabled here in case an earlier install enabled it.
+#
+# It is the confirmed cause of the cold-boot blank panel: it initialises the
+# SSD1322 before sable.service does, and hands over a controller that sable's
+# own init does not recover -- a dark panel for the whole session, with the
+# splash's pixels still in GRAM showing through as ghosting under the next
+# screen. Proven by disabling it and power-cycling: panel correct every time.
+# A `systemctl restart` always appeared to "fix" it precisely because the
+# splash does not run on a restart.
+#
+# The unit file is left in place because the IDEA is sound (the panel is
+# otherwise dark for ~32s while sable waits on the network stack) -- but it
+# must not run again until that handoff is actually fixed. Do not re-enable
+# this without power-cycle testing; a restart will not reproduce the fault.
+$SUDO systemctl disable sable-boot-splash.service >/dev/null 2>&1 || true
 
 # 5b. Install Sable Radio Volumio plugin --------------------------------------
 SABLERADIO_DIR="/data/plugins/music_service/sableradio"

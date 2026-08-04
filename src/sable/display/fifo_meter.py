@@ -27,7 +27,8 @@ PEPPY_SPECTRUM_MAX = 100
 
 
 class FifoBars:
-    def __init__(self, path=DISPLAY_FIFO, bars=24, log=print, stale_s=2.0):
+    def __init__(self, path=DISPLAY_FIFO, bars=24, log=print, stale_s=2.0,
+                 on_stuck=None, stuck_after_s=15.0):
         self.path = path
         self.bars = bars
         self.log = log
@@ -36,6 +37,18 @@ class FifoBars:
         self._buf = ""
         self._last = [0.0] * bars
         self._last_data_t = None       # monotonic of the last non-empty read
+        # Stuck-writer detection: CAVA can desync internally (observed after MPD
+        # player restarts mid-session) and keep running, keep writing well-formed
+        # frames on schedule, but with every bar permanently 0 -- the stale_s
+        # reopen above does NOT catch this since data IS arriving, just dead.
+        # on_stuck() fires once per stuck episode after stuck_after_s of solid
+        # zero frames (long enough that a genuine quiet passage should not
+        # trigger it); the caller (see app.py's respawn_cava) kills and
+        # relaunches the CAVA process.
+        self.on_stuck = on_stuck
+        self.stuck_after_s = stuck_after_s
+        self._zero_since = None
+        self._stuck_fired = False
 
     def _open(self):
         try:
@@ -86,11 +99,25 @@ class FifoBars:
             pass
         if got:
             self._last_data_t = now
+            if any(v > 0.0 for v in self._last):
+                self._zero_since = None
+                self._stuck_fired = False
+            elif self._zero_since is None:
+                self._zero_since = now
         elif self._last_data_t is not None and (now - self._last_data_t) >= self.stale_s:
             # Writer likely died / fifo recreated -> reconnect (cheap, O_NONBLOCK).
             self.close()
             self._open()
             self._last_data_t = now
+        if (self.on_stuck and not self._stuck_fired and self._zero_since is not None
+                and now - self._zero_since >= self.stuck_after_s):
+            self._stuck_fired = True
+            self.log("fifo_meter: writer stuck (all-zero for %.0fs) -- triggering recovery"
+                     % self.stuck_after_s)
+            try:
+                self.on_stuck()
+            except Exception as e:
+                self.log("fifo_meter: on_stuck callback error:", e)
         return self._last
 
     def close(self):
@@ -170,13 +197,15 @@ class PeppySpectrumBars:
                 self._fd = None
 
 
-def make_spectrum_reader(bars=24, log=print):
+def make_spectrum_reader(bars=24, log=print, on_stuck=None):
     """Platform-aware spectrum source: moOde reads peppyalsa's pipe directly
     (always live, nothing to spawn); Volumio/quadify reads Sable's own cava
-    output (see app.py's _start_live_spectrum_source, which spawns cava)."""
+    output (see app.py's _start_live_spectrum_source, which spawns cava).
+    on_stuck is Volumio/cava-only -- moOde's peppyalsa pipe isn't a spawned
+    process Sable owns, so there's nothing to respawn on that path."""
     if os.environ.get("SABLE_PLATFORM", "volumio").strip().lower() == "moode":
         return PeppySpectrumBars(PEPPY_SPECTRUM_FIFO, bars, log=log)
-    return FifoBars(DISPLAY_FIFO, bars, log=log)
+    return FifoBars(DISPLAY_FIFO, bars, log=log, on_stuck=on_stuck)
 
 
 class BarSmoother:
@@ -190,6 +219,18 @@ class BarSmoother:
         self.values = [0.0] * n
 
     def update(self, target):
+        # Track the SOURCE's band count rather than the one we were built with.
+        # update() used to iterate range(self.n) and treat anything past it as
+        # absent, so a source emitting more bands than the constructor was told
+        # about had its top bands silently dropped -- e.g. raising cava's `bars`
+        # to 40 against a smoother built for 24 would discard every band above
+        # ~8kHz and the meter would look bass-only for no visible reason. The
+        # count is a property of the frame, not of this object.
+        if target and len(target) != self.n:
+            n = len(target)
+            old = self.values
+            self.values = [old[i] if i < len(old) else 0.0 for i in range(n)]
+            self.n = n
         out = []
         for i in range(self.n):
             t = target[i] if i < len(target) else 0.0

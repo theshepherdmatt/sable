@@ -34,6 +34,7 @@ class VolumioListener:
         # pushBrowseLibrary as the answer to its last browse() call.
         self.on_browse = None
         self.on_sources = None
+        self.on_connect = None  # set by the app: fires once per successful connect
         self.browse_sources = []   # latest getBrowseSources result (HomeScreen reads it)
         self.sio = socketio.Client(reconnection=False)  # we own reconnect
         self._wire()
@@ -46,6 +47,11 @@ class VolumioListener:
             self.log("volumio: connected", self.url)
             sio.emit("getState")          # query current state
             sio.emit("getBrowseSources")  # query available services
+            if self.on_connect:
+                try:
+                    self.on_connect()
+                except Exception as e:
+                    self.log("on_connect callback error:", e)
 
         @sio.on("disconnect")
         def _on_disconnect():

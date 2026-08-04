@@ -90,6 +90,7 @@ class MoodeListener:
         # get_sources() call back synchronously right after fetching.
         self.on_browse = None
         self.on_sources = None
+        self.on_connect = None  # set by the app: fires once per successful connect
         self.browse_sources = [{"name": "Music Library", "uri": "/", "plugin_type": "mpd"}]
 
     # --- lifecycle ---
@@ -115,6 +116,11 @@ class MoodeListener:
                     self._client.connect(self.host, self.port)
                 self.log("moode: connected", "%s:%d" % (self.host, self.port))
                 attempt = 0
+                if self.on_connect:
+                    try:
+                        self.on_connect()
+                    except Exception as exc:
+                        self.log("on_connect callback error:", exc)
                 self._push_state()
                 while self._running:
                     with self._lock:

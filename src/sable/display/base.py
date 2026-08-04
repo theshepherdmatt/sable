@@ -41,5 +41,15 @@ class Display(ABC):
     def wake(self):
         pass
 
+    def clear(self):
+        """Unconditionally blank the whole panel (bypassing any diffing)."""
+
+    def reinit(self):
+        """Redo the panel's power-on init. No-op where there is no panel."""
+
+    def force_full_redraw(self):
+        """Drop any 'previous frame' a diffing backend is holding, so the next
+        present() writes the WHOLE panel. No-op where there is no diffing."""
+
     def cleanup(self):
         pass

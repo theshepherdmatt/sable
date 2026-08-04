@@ -29,7 +29,15 @@ def main():
     signal.signal(signal.SIGTERM, _stop)
     signal.signal(signal.SIGINT, _stop)
 
-    display = OledDisplay(hardware.OLED, rotate=0, log=print)
+    # Honour the user's panel rotation, same as the app does -- a panel mounted
+    # upside-down otherwise shows the splash inverted and then flips the moment
+    # sable.service takes over.
+    try:
+        from .settings import Settings
+        rotate_deg = int(Settings().get("display", "rotate", default=0) or 0)
+    except Exception:
+        rotate_deg = 0
+    display = OledDisplay(hardware.OLED, rotate=rotate_deg, log=print)
     fonts = Fonts()
     from PIL import Image, ImageDraw
 
@@ -51,6 +59,17 @@ def main():
     finally:
         # Handoff to sable.service: do not call display.cleanup() (which pulls
         # GPIO25 LOW and sleeps 1s, fighting sable.service's display init).
+        #
+        # Order matters: clear() BEFORE sleep(). hide() only sends 0xAE (panel
+        # off) -- it leaves "STARTING..." sitting in the controller's GRAM. If
+        # anything then goes wrong in sable.service's own reset/clear, those dots
+        # are still there to bleed through under the first real frames. Wiping
+        # GRAM ourselves means the worst case at handoff is a black panel, never
+        # a ghost of this splash.
+        try:
+            display.clear()
+        except Exception:
+            pass
         try:
             display.sleep()
         except Exception:

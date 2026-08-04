@@ -33,6 +33,7 @@ from .screens.meter import MeterScreen
 from .screens.modern import ModernScreen
 from .screens.browse import BrowseScreen
 from .screens.home import HomeScreen
+from .screens.shutdown import ShutdownScreen
 from .screens.splash import SplashScreen
 from .settings import Settings
 from .state import StateStore
@@ -96,11 +97,18 @@ class App:
         self.listener = None   # set on hardware/live runs; BrowseScreen uses it
         screens = [SplashScreen(self), ClockScreen(self), MenuScreen(self),
                    ModernScreen(self), MeterScreen(self), BrowseScreen(self),
-                   HomeScreen(self)]
+                   HomeScreen(self), ShutdownScreen(self)]
         self.fsm = FSM(self, screens, log=log)
         self.store.subscribe(self._on_state)
         self.last_input = time.monotonic()
         self.asleep = False
+        # Latched by _shutdown_sequence once the panel has been blanked for
+        # power-off. One-way: nothing clears it, because there is no "after" --
+        # see render(), which stops painting so the tick thread cannot undo the
+        # blank in the seconds between our poweroff request and the power
+        # actually going.
+        self._shutting_down = False
+        self._shutdown_started = False
         # Burn-in ladder: awake (user brightness) -> dim (reduced contrast +
         # pixel-shift) -> dark (faded off). Contrast is owned here so the ladder
         # can lower it and restore the user's brightness on wake.
@@ -368,7 +376,7 @@ class App:
 
     # --- rendering ---
     def render(self):
-        if self.asleep:
+        if self.asleep or self._shutting_down:
             return
         from PIL import ImageDraw
         with self._render_lock:
@@ -380,6 +388,13 @@ class App:
             if self._idle_tier == "dim":
                 img = self._burn_in_shift(img)
             cur_name = cur.name if cur is not None else None
+            if cur_name != self._rendered_screen:
+                # Self-heal any diffing desync right at the transition boundary
+                # -- see OledDisplay.force_full_redraw() for why.
+                try:
+                    self.display.force_full_redraw()
+                except Exception:
+                    pass
             out = self._with_transition(img, cur_name)
             out = self._draw_osd(out)
             self.display.present(out)
@@ -537,9 +552,104 @@ class App:
             self.log("config reloaded")
             self.render()
         elif cmd == "shutdown":
-            self.log("[dry-run] would poweroff" if self.dry_run else "poweroff")
+            self.begin_shutdown()
         else:
             self.log("unknown cmd:", cmd)
+
+    # --- power off ------------------------------------------------------------
+    def begin_shutdown(self):
+        """Button 8 (hold): message -> blank panel -> power off.
+
+        Runs on its own thread. handle() is called from the BUTTON scan thread,
+        and this sequence deliberately sleeps (the message has to be readable,
+        and the blank has to land before the power does); blocking there would
+        freeze every button, the LEDs and the matrix scan for the duration.
+        Idempotent -- a second hold while this is already running is ignored
+        rather than starting a second poweroff."""
+        if self._shutdown_started:
+            self.log("shutdown: already in progress")
+            return
+        self._shutdown_started = True
+        threading.Thread(target=self._shutdown_sequence, daemon=True,
+                         name="sable-shutdown").start()
+
+    def _shutdown_sequence(self):
+        hold_s = self.settings.get("display", "shutdown_message_s", default=1.6)
+        try:
+            hold_s = max(0.0, float(hold_s))
+        except (TypeError, ValueError):
+            hold_s = 1.6
+
+        # 1. CLEAR, then show the message. Both matter:
+        #    - the crossfade would dissolve the now-playing screen into this one,
+        #      so for ~_fade_s the panel shows a ghost of what we're leaving.
+        #      Dropping _last_frame gives _with_transition nothing to fade from.
+        #    - clear() wipes GRAM outright, so no part of the old screen can
+        #      survive underneath in a region the diff considers unchanged.
+        with self._render_lock:
+            self._fade = None
+            self._last_frame = None
+            self._rendered_screen = None
+            try:
+                self.display.clear()
+            except Exception as e:
+                self.log("shutdown: clear failed (continuing):", e)
+        # Full brightness: the idle ladder may have dimmed the panel, and the
+        # last thing the user sees should not be a faint message.
+        self._set_contrast(self._base_contrast)
+        self.go("shutdown")
+
+        # 2. Hold it long enough to actually read.
+        time.sleep(hold_s)
+
+        # 3. Blank. Latch FIRST: the tick thread renders continuously, so a
+        #    blank applied before render() is stopped is simply repainted on the
+        #    next tick and the panel stays lit into the power cut.
+        self._shutting_down = True
+        with self._render_lock:
+            try:
+                self.display.clear()
+                self.display.sleep()
+            except Exception as e:
+                self.log("shutdown: blank failed (continuing):", e)
+
+        # 4. Only now ask the OS to go down.
+        if self.dry_run:
+            self.log("[dry-run] would poweroff")
+            return
+        self.log("poweroff (button 8 hold)")
+        self._poweroff()
+
+    def _poweroff(self):
+        # Volumio: there is no valid `volumio shutdown` CLI subcommand (checked
+        # via --help; a bare Popen just printed usage and exited 0, doing
+        # nothing). Volumio's own web UI power button emits a bare 'shutdown'
+        # event over Socket.IO (websocket/index.js: connWebSocket.on('shutdown',
+        # ...) -> commandRouter.shutdown()), and Sable already holds that same
+        # live connection -- so reuse it rather than guess at a REST route.
+        sio = getattr(self.listener, "sio", None) if self.listener else None
+        if sio is not None:
+            try:
+                sio.emit("shutdown")
+                return
+            except Exception as e:
+                self.log("shutdown: socket.io emit failed:", e)
+        # moOde (and Volumio with a dead socket) has no such event. Fall back to
+        # systemd directly. Without this the moOde path blanked the panel and
+        # then just sat there: the old code logged "no live Volumio connection"
+        # and returned, so the Pi never powered off and the only way out was
+        # pulling the plug -- the exact thing a shutdown button exists to avoid.
+        # Needs the sudoers rule installed by install.sh / install-moode.sh.
+        import subprocess
+        for argv in (["sudo", "-n", "/bin/systemctl", "poweroff"],
+                     ["sudo", "-n", "/sbin/poweroff"]):
+            try:
+                if subprocess.call(argv) == 0:
+                    return
+            except Exception as e:
+                self.log("shutdown: %s failed: %s" % (argv[2], e))
+        self.log("shutdown error: no way to power off (no Volumio socket, "
+                 "and passwordless sudo poweroff was refused)")
 
     def _source_controls_transport(self):
         return (self.store.get().service or "").strip().lower() in _SOURCE_CONTROLLED
@@ -565,6 +675,35 @@ class App:
         label = hardware.DAC_INPUTS[idx]
         self.log("DAC input ->", label, "(hint; user-correctable)")
         self.show_osd(label, "INPUT")
+
+    def respawn_cava(self, reason="stuck"):
+        """Kill and relaunch the live cava process. Wired as FifoBars' on_stuck
+        callback (see display/fifo_meter.py) -- cava can desync internally (still
+        running, still writing well-formed frames, but every value stuck at 0)
+        rather than crashing outright, so nothing else notices it needs a kick.
+        _cava_procs/_cava_launch are set by _start_live_spectrum_source; absent
+        on moOde or the bench/spectrum stages, where there's nothing to respawn."""
+        procs = getattr(self, "_cava_procs", None)
+        launch = getattr(self, "_cava_launch", None)
+        if procs is None or launch is None:
+            self.log("cava: respawn requested (%s) but not running under the "
+                     "live-spectrum setup -- ignoring" % reason)
+            return
+        self.log("cava: respawning (%s)" % reason)
+        for p in list(procs):
+            try:
+                p.terminate()
+            except Exception:
+                pass
+            procs.remove(p)
+        cava_bin, conf = launch
+        import subprocess
+        try:
+            cava = subprocess.Popen([cava_bin, "-p", conf])
+            procs.append(cava)
+            self.log("cava: respawned")
+        except Exception as e:
+            self.log("cava: respawn failed:", e)
 
     # --- Phase 0 scripted slice ---
     def run_demo(self):
@@ -721,22 +860,65 @@ def _resolve_cava(log=print):
     return path
 
 
-def _start_live_spectrum_source(root, log=print):
+def _wait_for_mpd_fifo(timeout=90.0, poll=1.0, log=print):
+    """Block until Volumio has actually created _MPD_PCM_FIFO.
+
+    mpd.service being "active" is not enough: Volumio's backend applies its own
+    MPD output config (which creates the sable_fifo output's pipe on disk) well
+    after the mpd process starts -- observed ~2 minutes on a cold boot. cava opens
+    its input path ONCE at startup and never retries, so spawning it before this
+    file exists leaves it permanently silent until something respawns it. Returns
+    True if the fifo appeared, False if it gave up (caller still starts cava --
+    better a one-shot retry-less attempt than none)."""
+    deadline = time.monotonic() + timeout
+    while not os.path.exists(_MPD_PCM_FIFO):
+        if time.monotonic() >= deadline:
+            log("cava: %s never appeared after %.0fs -- starting cava anyway"
+                % (_MPD_PCM_FIFO, timeout))
+            return False
+        time.sleep(poll)
+    return True
+
+
+def _start_live_spectrum_source(root, app, log=print):
     """LIVE spectrum feed: one cava instance reading MPD's REAL PCM fifo
     (/tmp/cava.fifo) via config/cava-live.conf, writing ASCII bars to Sable's own
     /tmp/sable-display.fifo. This is the production path -- it REPLACES quadify's
     cava.service, which must be stopped first (only one reader may drain the PCM
-    fifo). No synthetic tone: bars track whatever Volumio is actually playing."""
+    fifo). No synthetic tone: bars track whatever Volumio is actually playing.
+
+    The fifo-wait runs in a background thread so a slow Volumio boot (fifo can
+    take ~2min to appear -- see _wait_for_mpd_fifo) does not delay rotary/IR/
+    buttons startup, which happen right after this returns. procs is returned
+    immediately (possibly still empty) and mutated in place once cava actually
+    launches; the caller cleanup loop (which terminates each proc) sees
+    the same list object, so this is safe without extra synchronisation.
+
+    Also stashes (procs, cava_bin, conf) on app so App.respawn_cava() can
+    kill+relaunch cava later without duplicating the launch details -- see
+    fifo_meter.FifoBars' on_stuck, wired from the screens that read cava's
+    output, which detects cava silently desyncing mid-session (still running,
+    still writing frames, but every value stuck at 0)."""
     import subprocess
+    import threading
     conf = os.path.join(root, "config", "cava-live.conf")
     if not os.path.exists(_SABLE_DISPLAY_FIFO):
         os.mkfifo(_SABLE_DISPLAY_FIFO)
     cava_bin = _resolve_cava(log)
     if not cava_bin:
         return []
-    cava = subprocess.Popen([cava_bin, "-p", conf])
-    log("live spectrum source: cava on %s -> %s" % (_MPD_PCM_FIFO, _SABLE_DISPLAY_FIFO))
-    return [cava]
+    procs = []
+    app._cava_procs = procs
+    app._cava_launch = (cava_bin, conf)
+
+    def _launch():
+        _wait_for_mpd_fifo(log=log)
+        cava = subprocess.Popen([cava_bin, "-p", conf])
+        procs.append(cava)
+        log("live spectrum source: cava on %s -> %s" % (_MPD_PCM_FIFO, _SABLE_DISPLAY_FIFO))
+
+    threading.Thread(target=_launch, daemon=True, name="sable-cava-wait").start()
+    return procs
 
 
 def _start_spectrum_source(root, log=print):
@@ -810,6 +992,7 @@ def run_hardware(stage="clock", rotate=None, contrast=None,
     ipc = None
     buttons = None
     procs = []
+    tick = None
 
     def shutdown(*_a):
         stop.set()
@@ -830,12 +1013,23 @@ def run_hardware(stage="clock", rotate=None, contrast=None,
         signal.signal(signal.SIGTERM, shutdown)
 
         app.go("splash")
-        threading.Thread(target=tick_loop, daemon=True, name="sable-tick").start()
+        tick = threading.Thread(target=tick_loop, daemon=True, name="sable-tick")
+        tick.start()
 
-        synced = clock_gate.wait_for_clock(timeout=45.0)
-        log("clock trustworthy:", synced)
-        app.go("clock")
+        # NB no deferred panel re-init here any more. It was added to chase the
+        # cold-boot blank on the strength of a test that turned out to have been
+        # run against an ALREADY-WORKING panel, so it proved nothing. The actual
+        # cause was sable-boot-splash.service: a second process initialising the
+        # SSD1322 before this one and leaving it in a state this process's init
+        # did not recover. With that service disabled the panel comes up every
+        # time, so the re-init was solving nothing and cost a visible repaint a
+        # few seconds into every start. OledDisplay.reinit() is kept -- it is a
+        # sound thing to have -- but nothing calls it on the happy path.
 
+        # The listener is started BEFORE the boot gate now, not after it. The
+        # gate below waits on Volumio being reachable, so the connection attempt
+        # has to already be in flight -- and starting it early also means the
+        # first pushState lands sooner.
         if stage in ("modern", "full"):
             listener = _make_listener(app.store, log=log)
             app.listener = listener
@@ -845,6 +1039,53 @@ def run_hardware(stage="clock", rotate=None, contrast=None,
             listener.on_sources = app.fsm.screens["home"].refresh_sources
             listener.start()
             log("Volumio listener started.")
+
+        # --- boot gate: hold the splash until the unit is genuinely READY ------
+        # Ready means BOTH: the clock is right, and Volumio is up. Either one
+        # alone leaves the panel telling a lie -- the clock screen with a bogus
+        # time (ntpd has not stepped yet), or a plausible-looking clock on a box
+        # that cannot actually play anything for another half minute, which
+        # reads as "broken" rather than "still starting".
+        #
+        # The old 45s clock budget was also too tight: ntpd steps at ~40s on
+        # this box, so a slightly slow network fell through to a wrong clock,
+        # which is the one thing this gate exists to prevent.
+        gate_s = settings.get("display", "boot_gate_s", default=120.0)
+        try:
+            gate_s = max(0.0, float(gate_s))
+        except (TypeError, ValueError):
+            gate_s = 120.0
+
+        def _volumio_ready():
+            if listener is None:
+                return True          # stages with no listener: nothing to wait for
+            return bool(getattr(getattr(listener, "sio", None), "connected", False))
+
+        def _splash(msg):
+            app.fsm.screens["splash"].subtitle = msg
+            app.render()
+
+        deadline = time.monotonic() + gate_s
+        synced = False
+        while not stop.is_set():
+            if not synced:
+                synced = clock_gate.is_synced()
+            ready = _volumio_ready()
+            if synced and ready:
+                break
+            if time.monotonic() >= deadline:
+                log("boot gate: timed out (clock=%s volumio=%s) -- continuing"
+                    % (synced, ready))
+                break
+            # Name what we are actually waiting on, so a slow boot looks like
+            # progress rather than a hang. The player's name is the platform's,
+            # not always "volumio" -- on moOde this same wait is for mpd.
+            waiting_for = "moode" if _platform() == "moode" else "volumio"
+            _splash("setting the clock" if not synced
+                    else "waiting for %s" % waiting_for)
+            time.sleep(0.5)
+        log("boot gate: clock=%s volumio=%s" % (synced, _volumio_ready()))
+        app.go("clock")
 
         if stage == "spectrum":
             app.settings.set("display", "screen", "spectrum")
@@ -861,7 +1102,7 @@ def run_hardware(stage="clock", rotate=None, contrast=None,
                 procs = []
                 log("live spectrum source: moOde peppyalsa (/tmp/peppyspectrum)")
             else:
-                procs = _start_live_spectrum_source(root, log=log)
+                procs = _start_live_spectrum_source(root, app, log=log)
             from .inputs.rotary import RotaryEncoder
             rotary = RotaryEncoder(
                 hardware.ROTARY,
@@ -888,6 +1129,13 @@ def run_hardware(stage="clock", rotate=None, contrast=None,
             if app.settings.get("controls", "leds_enabled", default=True):
                 from .inputs.buttons import ButtonsLeds
                 buttons = ButtonsLeds(hardware.MCP, app.handle, app.store, app=app, log=log)
+                # Boot LED sweep waits for Volumio (see ButtonsLeds.signal_ready);
+                # listener was created/started earlier in this function, so guard
+                # the race where it already connected before this wiring runs.
+                if listener is not None:
+                    listener.on_connect = buttons.signal_ready
+                    if getattr(getattr(listener, "sio", None), "connected", False):
+                        buttons.signal_ready()
                 buttons.start()
             else:
                 log("Buttons/LEDs disabled (controls.leds_enabled).")
@@ -898,6 +1146,35 @@ def run_hardware(stage="clock", rotate=None, contrast=None,
     finally:
         log("releasing hardware ...")
         stop.set()
+        # Wait for the render tick to actually stop before touching the panel.
+        # stop.set() only ASKS it to; without the join, sleep()/cleanup() below
+        # (and cleanup's GPIO.cleanup(), which yanks the pins luma is mid-write
+        # on) race an in-flight blit. On Restart=always that leaves the
+        # controller half-fed through the restart, so the next process inits over
+        # a confused panel -- blank, or streaked with the old frame. One tick
+        # period is the expected wait; the timeout keeps a wedged render from
+        # eating our TimeoutStopSec.
+        if tick is not None:
+            try:
+                tick.join(timeout=2.0)
+            except Exception:
+                pass
+        # Blank the panel FIRST, before anything network-dependent (listener/IR/
+        # IPC/cava terminate below). During a real system shutdown the network
+        # can be torn down concurrently with this process's own stop, and any of
+        # those calls hanging past sable.service's TimeoutStopSec gets this
+        # process SIGKILLed -- which skips whatever cleanup hadn't run yet. Panel
+        # cleanup is the one part a user actually SEES, so it must not be the
+        # part that silently gets skipped when something else hangs.
+        try:
+            display.sleep()
+        except Exception:
+            pass
+        try:
+            display.cleanup()
+        except Exception:
+            pass
+        log("SPI/GPIO released.")
         if rotary is not None:
             rotary.stop()
         if buttons is not None:
@@ -922,12 +1199,6 @@ def run_hardware(stage="clock", rotate=None, contrast=None,
                 p.terminate()
             except Exception:
                 pass
-        try:
-            display.sleep()
-        except Exception:
-            pass
-        display.cleanup()
-        log("SPI/GPIO released.")
     return 0
 
 
