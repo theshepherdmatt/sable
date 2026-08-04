@@ -28,7 +28,7 @@ PEPPY_SPECTRUM_MAX = 100
 
 class FifoBars:
     def __init__(self, path=DISPLAY_FIFO, bars=24, log=print, stale_s=2.0,
-                 on_stuck=None, stuck_after_s=15.0):
+                 on_stuck=None, stuck_after_s=15.0, stuck_cooldown_s=20.0):
         self.path = path
         self.bars = bars
         self.log = log
@@ -47,8 +47,9 @@ class FifoBars:
         # relaunches the CAVA process.
         self.on_stuck = on_stuck
         self.stuck_after_s = stuck_after_s
+        self.stuck_cooldown_s = stuck_cooldown_s
         self._zero_since = None
-        self._stuck_fired = False
+        self._last_fire_t = None
 
     def _open(self):
         try:
@@ -101,7 +102,7 @@ class FifoBars:
             self._last_data_t = now
             if any(v > 0.0 for v in self._last):
                 self._zero_since = None
-                self._stuck_fired = False
+                self._last_fire_t = None      # recovered: re-arm immediately
             elif self._zero_since is None:
                 self._zero_since = now
         elif self._last_data_t is not None and (now - self._last_data_t) >= self.stale_s:
@@ -109,9 +110,25 @@ class FifoBars:
             self.close()
             self._open()
             self._last_data_t = now
-        if (self.on_stuck and not self._stuck_fired and self._zero_since is not None
-                and now - self._zero_since >= self.stuck_after_s):
-            self._stuck_fired = True
+        # Recovery is RE-ARMABLE, not once-per-session.
+        #
+        # It used to latch _stuck_fired = True and only clear it on a non-zero
+        # bar -- i.e. only if recovery had already worked. On a cold boot it
+        # never can: cava is spawned before anything is playing, so the fifo it
+        # opens has no writer, the single recovery attempt fires ~15s later
+        # while the box is still silent, respawned cava opens a writer-less fifo
+        # again, and the one attempt is spent. The spectrum then stays dead for
+        # the whole session no matter what you play. Seen exactly once per boot
+        # in the journal, always in the first two minutes, always futile.
+        #
+        # So retry on a cooldown instead of giving up. The cost of a wasted
+        # attempt is one process respawn; the cost of not retrying is a dead
+        # spectrum until the user restarts the service.
+        if (self.on_stuck and self._zero_since is not None
+                and now - self._zero_since >= self.stuck_after_s
+                and (self._last_fire_t is None
+                     or now - self._last_fire_t >= self.stuck_cooldown_s)):
+            self._last_fire_t = now
             self.log("fifo_meter: writer stuck (all-zero for %.0fs) -- triggering recovery"
                      % self.stuck_after_s)
             try:

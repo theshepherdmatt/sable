@@ -689,6 +689,17 @@ class App:
             self.log("cava: respawn requested (%s) but not running under the "
                      "live-spectrum setup -- ignoring" % reason)
             return
+        # Only act when audio should actually be flowing. All-zero bars are the
+        # CORRECT reading for a stopped or paused player, so respawning then
+        # fixes nothing and would churn a process every cooldown while the box
+        # sits idle. Under `play` the same reading means cava is genuinely
+        # broken -- almost always because it opened /tmp/cava.fifo before MPD
+        # had a writer on it, which is exactly the cold-boot case. cava opens
+        # its input once and never retries, so a respawn is the only cure.
+        if self.store.get().status != "play":
+            self.log("cava: stuck (%s) but nothing is playing -- deferring "
+                     "respawn until playback starts" % reason)
+            return
         self.log("cava: respawning (%s)" % reason)
         for p in list(procs):
             try:
