@@ -21,7 +21,8 @@ import sys
 import threading
 import time
 
-from . import clock_gate, hardware
+from . import clock_gate, hardware, stations
+from .stations import split_uri_arg as _split_uri_arg
 from .display.albumart import AlbumArtCache
 from .display.fonts import Fonts
 from .display.icons import IconCache
@@ -538,10 +539,21 @@ class App:
             else:
                 self.go("home")
             self.render()
+        elif cmd in stations.PRESETS:
+            # A built-in station chosen straight from the dropdown. Same path as
+            # play_uri, but the URL and logo come from the table rather than
+            # from something the user had to paste in.
+            if self.listener is not None:
+                title, uri, art = stations.get(cmd)
+                self.listener.play_uri(uri, title=title, albumart=art)
+                self.show_osd("RADIO", title)
         elif cmd == "play_uri":
             if self.listener is not None and arg:
-                self.listener.play_uri(str(arg))
-                self.show_osd("RADIO", str(arg))
+                uri, title, art = _split_uri_arg(arg)
+                self.listener.play_uri(uri, title=title, albumart=art)
+                # The URI is a wall of text on a 256px panel; show the station
+                # name when the user gave us one.
+                self.show_osd("RADIO", title or uri)
         elif cmd == "play_playlist":
             if self.listener is not None and arg:
                 self.listener.play_playlist(str(arg))

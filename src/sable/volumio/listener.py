@@ -152,9 +152,29 @@ class VolumioListener:
             pass
 
     # --- the ONE place Sable initiates playback (everything else is read-only) ---
-    def play_uri(self, uri):
+    def play_uri(self, uri, title=None, albumart=None):
+        """Play a URI configured on a front-panel button.
+
+        A bare {"uri": ...} does not work for a plain stream URL: Volumio has no
+        service to route it to and silently does nothing (verified against a BBC
+        HLS .m3u8 -- no pushState, no toast, no audio). An http(s) URL is web
+        radio, so say so, and carry the title and artwork if we were given them:
+        Volumio keeps whatever albumart is passed here and reports it back in
+        pushState, which is the only way the panel can show a station logo.
+        Without it the state carries the generic "/albumart" placeholder.
+
+        Non-http URIs (mpd:, spotify:, favourites/...) are left as the plain
+        dict -- those already carry their own service in the URI scheme, and
+        guessing "webradio" for them would break the routing that does work.
+        """
+        item = {"uri": uri}
+        if str(uri).startswith(("http://", "https://")):
+            item.update(service="webradio", type="webradio",
+                        title=title or "Web Radio")
+            if albumart:
+                item["albumart"] = albumart
         try:
-            self.sio.emit("replaceAndPlay", {"uri": uri})
+            self.sio.emit("replaceAndPlay", item)
         except Exception as exc:
             self.log("play_uri error:", exc)
 

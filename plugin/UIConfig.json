@@ -393,6 +393,10 @@
               "label": "Power Off (hold 2s)"
             },
             {
+              "value": "bbc_radio_1",
+              "label": "BBC Radio 1"
+            },
+            {
               "value": "none",
               "label": "Disabled (None)"
             }
@@ -404,7 +408,7 @@
           "type": "text",
           "label": "Button 1 Argument (URI / Playlist Name)",
           "value": "",
-          "description": "Optional argument for Button 1 when action is set to 'Play Stream / URI' or 'Play Playlist'."
+          "description": "Optional argument for Button 1. For 'Play Playlist': the playlist name. For 'Play Stream / URI': the stream URL, optionally followed by a station name and logo URL separated by pipes -- URL | BBC Radio 1 | https://example.com/logo.png. Volumio only shows a station name and artwork on the panel if you supply them here."
         },
         {
           "id": "btn2_action",
@@ -475,7 +479,7 @@
           "type": "text",
           "label": "Button 2 Argument (URI / Playlist Name)",
           "value": "",
-          "description": "Optional argument for Button 2 when action is set to 'Play Stream / URI' or 'Play Playlist'."
+          "description": "Optional argument for Button 2. For 'Play Playlist': the playlist name. For 'Play Stream / URI': the stream URL, optionally followed by a station name and logo URL separated by pipes -- URL | BBC Radio 1 | https://example.com/logo.png. Volumio only shows a station name and artwork on the panel if you supply them here."
         },
         {
           "id": "btn3_action",
@@ -535,6 +539,10 @@
               "label": "Power Off (hold 2s)"
             },
             {
+              "value": "bbc_radio_2",
+              "label": "BBC Radio 2"
+            },
+            {
               "value": "none",
               "label": "Disabled (None)"
             }
@@ -546,7 +554,7 @@
           "type": "text",
           "label": "Button 3 Argument (URI / Playlist Name)",
           "value": "",
-          "description": "Optional argument for Button 3 when action is set to 'Play Stream / URI' or 'Play Playlist'."
+          "description": "Optional argument for Button 3. For 'Play Playlist': the playlist name. For 'Play Stream / URI': the stream URL, optionally followed by a station name and logo URL separated by pipes -- URL | BBC Radio 1 | https://example.com/logo.png. Volumio only shows a station name and artwork on the panel if you supply them here."
         },
         {
           "id": "btn4_action",
@@ -617,7 +625,7 @@
           "type": "text",
           "label": "Button 4 Argument (URI / Playlist Name)",
           "value": "",
-          "description": "Optional argument for Button 4 when action is set to 'Play Stream / URI' or 'Play Playlist'."
+          "description": "Optional argument for Button 4. For 'Play Playlist': the playlist name. For 'Play Stream / URI': the stream URL, optionally followed by a station name and logo URL separated by pipes -- URL | BBC Radio 1 | https://example.com/logo.png. Volumio only shows a station name and artwork on the panel if you supply them here."
         },
         {
           "id": "btn5_action",
@@ -677,6 +685,10 @@
               "label": "Power Off (hold 2s)"
             },
             {
+              "value": "bbc_radio_3",
+              "label": "BBC Radio 3"
+            },
+            {
               "value": "none",
               "label": "Disabled (None)"
             }
@@ -688,7 +700,7 @@
           "type": "text",
           "label": "Button 5 Argument (URI / Playlist Name)",
           "value": "",
-          "description": "Optional argument for Button 5 when action is set to 'Play Stream / URI' or 'Play Playlist'."
+          "description": "Optional argument for Button 5. For 'Play Playlist': the playlist name. For 'Play Stream / URI': the stream URL, optionally followed by a station name and logo URL separated by pipes -- URL | BBC Radio 1 | https://example.com/logo.png. Volumio only shows a station name and artwork on the panel if you supply them here."
         },
         {
           "id": "btn6_action",
@@ -748,6 +760,18 @@
               "label": "Power Off (hold 2s)"
             },
             {
+              "value": "bbc_radio_london",
+              "label": "BBC Radio London"
+            },
+            {
+              "value": "bbc_radio_scotland",
+              "label": "BBC Radio Scotland"
+            },
+            {
+              "value": "bbc_radio_ulster",
+              "label": "BBC Radio Ulster"
+            },
+            {
               "value": "none",
               "label": "Disabled (None)"
             }
@@ -759,7 +783,7 @@
           "type": "text",
           "label": "Button 6 Argument (URI / Playlist Name)",
           "value": "",
-          "description": "Optional argument for Button 6 when action is set to 'Play Stream / URI' or 'Play Playlist'."
+          "description": "Optional argument for Button 6. For 'Play Playlist': the playlist name. For 'Play Stream / URI': the stream URL, optionally followed by a station name and logo URL separated by pipes -- URL | BBC Radio 1 | https://example.com/logo.png. Volumio only shows a station name and artwork on the panel if you supply them here."
         },
         {
           "id": "btn7_action",
@@ -819,6 +843,10 @@
               "label": "Power Off (hold 2s)"
             },
             {
+              "value": "bbc_radio_4",
+              "label": "BBC Radio 4"
+            },
+            {
               "value": "none",
               "label": "Disabled (None)"
             }
@@ -830,7 +858,7 @@
           "type": "text",
           "label": "Button 7 Argument (URI / Playlist Name)",
           "value": "",
-          "description": "Optional argument for Button 7 when action is set to 'Play Stream / URI' or 'Play Playlist'."
+          "description": "Optional argument for Button 7. For 'Play Playlist': the playlist name. For 'Play Stream / URI': the stream URL, optionally followed by a station name and logo URL separated by pipes -- URL | BBC Radio 1 | https://example.com/logo.png. Volumio only shows a station name and artwork on the panel if you supply them here."
         },
         {
           "id": "btn8_action",
@@ -901,7 +929,7 @@
           "type": "text",
           "label": "Button 8 Argument (URI / Playlist Name)",
           "value": "",
-          "description": "Optional argument for Button 8 when action is set to 'Play Stream / URI' or 'Play Playlist'."
+          "description": "Optional argument for Button 8. For 'Play Playlist': the playlist name. For 'Play Stream / URI': the stream URL, optionally followed by a station name and logo URL separated by pipes -- URL | BBC Radio 1 | https://example.com/logo.png. Volumio only shows a station name and artwork on the panel if you supply them here."
         }
       ],
       "saveButton": {

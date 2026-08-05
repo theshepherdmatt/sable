@@ -21,6 +21,12 @@ var LIRCD_CONF = '/etc/lirc/lircd.conf';
 var DEFAULT_IR_PROFILE = 'Xiaomi IR for TV box';
 var USERCONFIG = '/boot/userconfig.txt';
 var DEFAULT_IR_GPIO_PIN = 4;
+// Front-panel button fallbacks, used when the form posts an empty select and
+// when the settings page is opened before anything has been saved. Button 8 is
+// the power button -- defaulting it to 'none' here is what killed shutdown,
+// since any written action overrides the built-in default. Keep in step with
+// src/sable/settings.py DEFAULTS['buttons'].
+var BTN_DEFAULTS = { 1: 'play', 2: 'pause', 3: 'previous', 4: 'next', 5: 'random', 6: 'repeat', 7: 'none', 8: 'shutdown' };
 
 module.exports = SablePlugin;
 
@@ -219,6 +225,15 @@ SablePlugin.prototype.getUIConfig = function () {
       self._fillProfileSelect(uiconf, 'ir_profile', self._irProfiles(),
         self._get(s, 'ir', 'profile', DEFAULT_IR_PROFILE));
       self._fillInput(uiconf, 'ir_gpio_pin', self._irGpioPin());
+      // The eight button rows. Without this the page always showed UIConfig's
+      // static defaults no matter what was saved -- and since saveButtonsConfig
+      // writes all eight from the form, simply opening the page and pressing
+      // Save wiped the user's assignments back to the defaults.
+      for (var b = 1; b <= 8; b++) {
+        var btn = self._get(s, 'buttons', 'btn_' + b, {}) || {};
+        self._fillSelect(uiconf, 'btn' + b + '_action', btn.action || BTN_DEFAULTS[b]);
+        self._fillInput(uiconf, 'btn' + b + '_arg', btn.arg || '');
+      }
       defer.resolve(uiconf);
     })
     .fail(function (e) {
@@ -284,13 +299,8 @@ SablePlugin.prototype.saveScreensaver = function (data) {
 
 SablePlugin.prototype.saveButtonsConfig = function (data) {
   var s = this._read();
-  // Fallbacks only (used when the form posts an empty select). Button 8 is the
-  // power button -- defaulting it to 'none' here is what killed shutdown, since
-  // any written action overrides the built-in default. Keep in step with
-  // src/sable/settings.py DEFAULTS['buttons'].
-  var bActions = { 1: 'play', 2: 'pause', 3: 'previous', 4: 'next', 5: 'random', 6: 'repeat', 7: 'none', 8: 'shutdown' };
   for (var b = 1; b <= 8; b++) {
-    var act = this._val(data['btn' + b + '_action']) || bActions[b];
+    var act = this._val(data['btn' + b + '_action']) || BTN_DEFAULTS[b];
     var arg = data['btn' + b + '_arg'] || '';
     this._set(s, 'buttons', 'btn_' + b, { action: act, arg: String(arg).trim() });
   }

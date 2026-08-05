@@ -18,6 +18,7 @@ import dataclasses
 import threading
 import time
 
+from .. import stations
 from ..hardware import led_byte
 
 # LED bit positions on GPIOA (mirror hardware.py; one lit at a time).
@@ -296,6 +297,14 @@ class ButtonsLeds:
             return 0                       # AirPlay: status unknowable -> no LED
         status = st.status
         if status == "play":
+            # On a radio-button layout the meaningful light is "which station is
+            # on", not "playback is happening" -- an FM4 lights the button you
+            # pressed. Only applies when a button is actually assigned a
+            # station: a panel set up as ordinary transport has no match here
+            # and keeps the play LED exactly as before.
+            station = self._station_led(st)
+            if station:
+                return station
             return LED_PLAY
         if status == "pause":
             # Once idle (fallen to the clock) or the panel has slept, stop the
@@ -309,6 +318,23 @@ class ButtonsLeds:
                 return LED_PAUSE
             return LED_PAUSE if (now % 1.4) < 1.0 else 0    # active-pause heartbeat
         return 0                                            # stopped: dark
+
+    def _station_led(self, st):
+        """LED of the button whose station is playing now, or 0 for none.
+
+        Matches on the stream URI rather than the title: Volumio rewrites the
+        title to the current programme once a stream is running ('BBC Radio 2'
+        becomes whatever show is on), so a title comparison lights the button
+        for about a second and then goes dark.
+        """
+        uri = (st.uri or "").strip()
+        if not uri:
+            return 0
+        for btn in range(1, 9):
+            (cmd, arg), led = self._get_button_action(btn)
+            if led and stations.button_uri(cmd, arg) == uri:
+                return led
+        return 0
 
     def _flash(self, led):
         if self._timer:
