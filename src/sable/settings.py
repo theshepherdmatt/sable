@@ -43,9 +43,14 @@ DEFAULTS = {
         "btn_5": {"action": "random", "arg": ""},
         "btn_6": {"action": "repeat", "arg": ""},
         "btn_7": {"action": "none", "arg": ""},
-        "btn_8": {"action": "none", "arg": ""},
+        # Button 8 is the power button (hold 2s -- see inputs/buttons.py). It
+        # shipped as "none" here, which silently beat the "shutdown" default in
+        # _BUTTON_ACTION: _get_button_action treats any truthy configured action
+        # as an override, and the string "none" is truthy. Fresh installs got a
+        # dead power button. Keep this in step with _BUTTON_ACTION.
+        "btn_8": {"action": "shutdown", "arg": ""},
     },
-    "_meta": {"rev": 1},
+    "_meta": {"rev": 2},
 }
 
 _DEFAULT_PATH = os.path.join(
@@ -78,11 +83,37 @@ class Settings:
                 with open(self.path, "r") as fh:
                     raw = json.load(fh)
                 self._data = _deep_merge(DEFAULTS, raw)
+                if self._migrate():
+                    self.save()
             except FileNotFoundError:
                 self.save()
             except (ValueError, OSError):
                 pass
             return self._data
+
+    def _migrate(self):
+        """Bring an on-disk file up to the current rev. Returns True if anything
+        changed (caller persists it).
+
+        A saved file always beats DEFAULTS, so fixing a bad default is not
+        enough on its own -- every unit that has already written settings.json
+        keeps the old value forever. Hence this.
+        """
+        changed = False
+        rev = (self._data.get("_meta") or {}).get("rev", 1)
+        if rev < 2:
+            # rev 2: button 8 is the power button. It was written as "none",
+            # which overrode the built-in "shutdown" and left the button dead.
+            # Only rewrite the broken value -- a deliberate reassignment to
+            # something other than "none" is the user's and stays untouched.
+            btn8 = (self._data.get("buttons") or {}).get("btn_8")
+            if isinstance(btn8, dict) and btn8.get("action") in (None, "", "none"):
+                btn8["action"] = "shutdown"
+                changed = True
+        if rev < 2:
+            self._data.setdefault("_meta", {})["rev"] = 2
+            changed = True
+        return changed
 
     def save(self):
         with self._lock:

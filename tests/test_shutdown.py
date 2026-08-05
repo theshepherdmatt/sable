@@ -120,6 +120,107 @@ def test_second_hold_does_not_start_a_second_sequence():
     assert display.ops.count("sleep") == 1
 
 
+def test_button_8_resolves_to_shutdown_by_default():
+    """The bug that made the power button dead on a fresh install: settings.py
+    shipped btn_8 as "none", and _get_button_action treats ANY truthy configured
+    action as an override -- so the string "none" beat the built-in "shutdown"
+    and the journal read `button 8 pressed: cmd=none`."""
+    import json
+
+    from sable.inputs.buttons import ButtonsLeds
+
+    path = os.path.join(tempfile.gettempdir(), "sable_btn8_settings.json")
+    if os.path.exists(path):
+        os.unlink(path)
+    settings = Settings(path=path)          # fresh file -> defaults are written
+    app = type("A", (), {"settings": settings})()
+    btns = ButtonsLeds.__new__(ButtonsLeds)
+    btns._app = app
+    (cmd, _arg), _led = btns._get_button_action(8)
+    assert cmd == "shutdown", "button 8 resolved to %r" % (cmd,)
+
+    # ...and a unit that already wrote the broken value gets migrated, since a
+    # saved file always beats DEFAULTS.
+    with open(path) as fh:
+        data = json.load(fh)
+    data["buttons"]["btn_8"] = {"action": "none", "arg": ""}
+    data["_meta"] = {"rev": 1}
+    with open(path, "w") as fh:
+        json.dump(data, fh)
+    migrated = Settings(path=path)
+    assert migrated.get("buttons", "btn_8", "action") == "shutdown"
+    assert migrated.get("_meta", "rev") == 2
+
+    # A deliberate reassignment is not clobbered by the migration.
+    data["buttons"]["btn_8"] = {"action": "menu", "arg": ""}
+    data["_meta"] = {"rev": 1}
+    with open(path, "w") as fh:
+        json.dump(data, fh)
+    assert Settings(path=path).get("buttons", "btn_8", "action") == "menu"
+
+
+def test_poweroff_falls_back_when_volumio_ignores_the_event():
+    """emit() succeeding is not the machine going down. python-socketio only
+    raises when the client is disconnected, so a Volumio that simply does not
+    act on the event used to leave the Pi blanked and running forever."""
+    import subprocess
+
+    import sable.app as app_mod
+
+    app, _ = _app()
+    app.dry_run = False
+
+    class _Sio:
+        def __init__(self):
+            self.events = []
+
+        def emit(self, name, *a):
+            self.events.append(name)      # accepted, and does nothing else
+
+    sio = _Sio()
+    app.listener = type("L", (), {"sio": sio})()
+
+    calls = []
+    real_call, real_grace = subprocess.call, app_mod._VOLUMIO_POWEROFF_GRACE_S
+    subprocess.call = lambda argv, **kw: (calls.append(argv), 0)[1]
+    app_mod._VOLUMIO_POWEROFF_GRACE_S = 0.05
+    try:
+        app._poweroff()
+    finally:
+        subprocess.call = real_call
+        app_mod._VOLUMIO_POWEROFF_GRACE_S = real_grace
+
+    assert sio.events == ["shutdown"], "Volumio was never asked first"
+    assert calls, "no poweroff command was run after Volumio ignored the event"
+    assert "poweroff" in " ".join(calls[0])
+
+
+def test_poweroff_tries_later_commands_when_sudo_is_refused():
+    """A sudoers rule that failed visudo validation at install time makes every
+    sudo form exit non-zero. That must not stop the remaining candidates."""
+    import subprocess
+
+    app, _ = _app()
+    app.dry_run = False
+    app.listener = None
+
+    calls = []
+
+    def _call(argv, **kw):
+        calls.append(argv)
+        return 1 if argv[0] == "sudo" else 0
+
+    real_call = subprocess.call
+    subprocess.call = _call
+    try:
+        app._poweroff()
+    finally:
+        subprocess.call = real_call
+
+    assert len(calls) > 1, "gave up after the first refusal: %r" % (calls,)
+    assert calls[-1][0] != "sudo", "never tried a non-sudo poweroff"
+
+
 def test_shutdown_screen_is_not_the_boot_splash():
     app, _ = _app()
     app.handle("shutdown")

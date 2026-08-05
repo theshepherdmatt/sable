@@ -389,6 +389,10 @@
               "label": "Play Playlist"
             },
             {
+              "value": "shutdown",
+              "label": "Power Off (hold 2s)"
+            },
+            {
               "value": "none",
               "label": "Disabled (None)"
             }
@@ -454,6 +458,10 @@
             {
               "value": "play_playlist",
               "label": "Play Playlist"
+            },
+            {
+              "value": "shutdown",
+              "label": "Power Off (hold 2s)"
             },
             {
               "value": "none",
@@ -523,6 +531,10 @@
               "label": "Play Playlist"
             },
             {
+              "value": "shutdown",
+              "label": "Power Off (hold 2s)"
+            },
+            {
               "value": "none",
               "label": "Disabled (None)"
             }
@@ -588,6 +600,10 @@
             {
               "value": "play_playlist",
               "label": "Play Playlist"
+            },
+            {
+              "value": "shutdown",
+              "label": "Power Off (hold 2s)"
             },
             {
               "value": "none",
@@ -657,6 +673,10 @@
               "label": "Play Playlist"
             },
             {
+              "value": "shutdown",
+              "label": "Power Off (hold 2s)"
+            },
+            {
               "value": "none",
               "label": "Disabled (None)"
             }
@@ -722,6 +742,10 @@
             {
               "value": "play_playlist",
               "label": "Play Playlist"
+            },
+            {
+              "value": "shutdown",
+              "label": "Power Off (hold 2s)"
             },
             {
               "value": "none",
@@ -791,6 +815,10 @@
               "label": "Play Playlist"
             },
             {
+              "value": "shutdown",
+              "label": "Power Off (hold 2s)"
+            },
+            {
               "value": "none",
               "label": "Disabled (None)"
             }
@@ -809,8 +837,8 @@
           "element": "select",
           "label": "Button 8 Action",
           "value": {
-            "value": "none",
-            "label": "Disabled (None)"
+            "value": "shutdown",
+            "label": "Power Off (hold 2s)"
           },
           "options": [
             {
@@ -856,6 +884,10 @@
             {
               "value": "play_playlist",
               "label": "Play Playlist"
+            },
+            {
+              "value": "shutdown",
+              "label": "Power Off (hold 2s)"
             },
             {
               "value": "none",

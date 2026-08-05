@@ -43,6 +43,12 @@ TRANSPORT = {"play", "pause", "toggle", "next", "previous", "random", "repeat"}
 # play/pause/skip is futile -- it either does nothing or the source immediately
 # resumes (AirPlay). Pressing transport here shows a hint instead of fighting it.
 _SOURCE_CONTROLLED = frozenset({"airplay", "airplay_emulation"})
+# How long to let Volumio act on our 'shutdown' event before we power the
+# machine off ourselves. Long enough for a real shutdown to have begun (its
+# services stop well inside this), short enough that a user holding button 8
+# is not left staring at a blank panel wondering whether it worked.
+_VOLUMIO_POWEROFF_GRACE_S = 6.0
+
 _FIXTURE = os.path.normpath(
     os.path.join(os.path.dirname(__file__), "..", "..", "tests", "fixtures", "rp_paused.json")
 )
@@ -637,11 +643,19 @@ class App:
         # event over Socket.IO (websocket/index.js: connWebSocket.on('shutdown',
         # ...) -> commandRouter.shutdown()), and Sable already holds that same
         # live connection -- so reuse it rather than guess at a REST route.
+        # A successful emit is NOT a successful shutdown. emit() only raises when
+        # the client is disconnected; if Volumio simply ignores the event (seen
+        # on a fresh image) it returns cleanly and the Pi stays up forever. So
+        # emit, give Volumio a few seconds to actually take us down, and if we
+        # are still executing, fall through to systemd below.
         sio = getattr(self.listener, "sio", None) if self.listener else None
         if sio is not None:
             try:
                 sio.emit("shutdown")
-                return
+                self.log("shutdown: emitted 'shutdown' to Volumio, waiting")
+                time.sleep(_VOLUMIO_POWEROFF_GRACE_S)
+                self.log("shutdown: Volumio did not power off, falling back "
+                         "to systemd")
             except Exception as e:
                 self.log("shutdown: socket.io emit failed:", e)
         # moOde (and Volumio with a dead socket) has no such event. Fall back to
@@ -650,16 +664,31 @@ class App:
         # and returned, so the Pi never powered off and the only way out was
         # pulling the plug -- the exact thing a shutdown button exists to avoid.
         # Needs the sudoers rule installed by install.sh / install-moode.sh.
+        # Several spellings, because which one works depends on how Sable was
+        # installed: the sudoers rule names absolute paths (so PATH lookups and
+        # the bare binaries are not interchangeable), and if the rule failed
+        # visudo validation during install every sudo form is refused -- in
+        # which case running as root, if we are, is the only way out. Log the
+        # exit status of each so a failure here is diagnosable from the journal
+        # rather than a silent no-op.
         import subprocess
         for argv in (["sudo", "-n", "/bin/systemctl", "poweroff"],
-                     ["sudo", "-n", "/sbin/poweroff"]):
+                     ["sudo", "-n", "/sbin/poweroff"],
+                     ["sudo", "-n", "/usr/bin/systemctl", "poweroff"],
+                     ["systemctl", "poweroff"],
+                     ["poweroff"]):
             try:
-                if subprocess.call(argv) == 0:
+                rc = subprocess.call(argv, stdout=subprocess.DEVNULL,
+                                     stderr=subprocess.STDOUT)
+                if rc == 0:
+                    self.log("shutdown: %s accepted" % " ".join(argv))
                     return
+                self.log("shutdown: %s exited %d" % (" ".join(argv), rc))
             except Exception as e:
-                self.log("shutdown: %s failed: %s" % (argv[2], e))
-        self.log("shutdown error: no way to power off (no Volumio socket, "
-                 "and passwordless sudo poweroff was refused)")
+                self.log("shutdown: %s failed: %s" % (" ".join(argv), e))
+        self.log("shutdown error: no way to power off (Volumio ignored the "
+                 "event and every poweroff command was refused -- check "
+                 "/etc/sudoers.d/sable)")
 
     def _source_controls_transport(self):
         return (self.store.get().service or "").strip().lower() in _SOURCE_CONTROLLED

@@ -284,7 +284,11 @@ SablePlugin.prototype.saveScreensaver = function (data) {
 
 SablePlugin.prototype.saveButtonsConfig = function (data) {
   var s = this._read();
-  var bActions = { 1: 'play', 2: 'pause', 3: 'previous', 4: 'next', 5: 'random', 6: 'repeat', 7: 'none', 8: 'none' };
+  // Fallbacks only (used when the form posts an empty select). Button 8 is the
+  // power button -- defaulting it to 'none' here is what killed shutdown, since
+  // any written action overrides the built-in default. Keep in step with
+  // src/sable/settings.py DEFAULTS['buttons'].
+  var bActions = { 1: 'play', 2: 'pause', 3: 'previous', 4: 'next', 5: 'random', 6: 'repeat', 7: 'none', 8: 'shutdown' };
   for (var b = 1; b <= 8; b++) {
     var act = this._val(data['btn' + b + '_action']) || bActions[b];
     var arg = data['btn' + b + '_arg'] || '';
