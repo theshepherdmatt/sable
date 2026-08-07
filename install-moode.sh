@@ -30,7 +30,12 @@ if [ -z "$SABLE_USER" ]; then
 fi
 [ -n "$SABLE_USER" ] || { echo "FATAL: could not determine the moOde system user (set SABLE_USER=... and re-run)"; exit 1; }
 
-SABLE_DIR="${SABLE_DIR:-/home/$SABLE_USER/sable}"
+# Where the clone actually is. Default to the directory holding THIS script --
+# the installer always ships inside the repo, so that is right by construction no
+# matter where the user cloned to. (Assuming /home/$SABLE_USER/sable instead just
+# hard-failed with "Sable code not found" on any other layout.) An explicit
+# SABLE_DIR= still wins.
+SABLE_DIR="${SABLE_DIR:-$(cd "$(dirname "$0")" && pwd)}"
 UNIT_SRC="$SABLE_DIR/systemd/sable-moode.service.tmpl"
 UNIT_DST="/etc/systemd/system/sable.service"
 DISABLED_DIR="$SABLE_DIR/disabled-units"
@@ -54,24 +59,33 @@ log "healing apt + installing system packages ..."
 $SUDO dpkg --configure -a >/dev/null 2>&1 || true
 $SUDO apt-get -f $APT_OPTS install >/dev/null 2>&1 || true
 $SUDO apt-get update >/dev/null 2>&1 || warn "apt-get update had errors (continuing)"
-# Build toolchain + PREBUILT C-extension deps (Pillow/spidev/RPi.GPIO/smbus) so
-# pip does NOT need to compile them. Optional: lirc (IR), i2c-tools. NOTE: mpd
-# is already provided by moOde itself. NO cava here -- moOde's spectrum comes
-# from peppyalsa (an ALSA plugin every audio_output already routes through by
-# default, writing to /tmp/peppyspectrum), which Sable reads directly
-# (fifo_meter.PeppySpectrumBars). Installing cava was ALSO a real problem on a
-# stock moOde 9 image: it shared one apt transaction with python3-rpi.gpio,
-# which conflicts with python3-rpi-lgpio (a dependency of moOde's own
-# boss2-oled-p3 package) -- apt aborts the WHOLE transaction on that conflict,
-# so cava silently never installed. Dropping it here removes that failure mode
-# entirely (RPi.GPIO itself still installs fine via the pip step below, which
-# compiles it from source independent of apt).
-$SUDO apt-get install $APT_OPTS --no-install-recommends \
-  python3-dev python3-pip build-essential \
-  zlib1g-dev libjpeg-dev libfreetype6-dev \
-  python3-pil python3-rpi.gpio python3-spidev python3-cbor2 python3-smbus \
-  lirc i2c-tools \
-  || warn "apt install hit problems -- check the package list above"
+# Build toolchain + PREBUILT C-extension deps (Pillow/spidev/smbus) so pip does
+# NOT need to compile them. Optional: lirc (IR), i2c-tools. NOTE: mpd is already
+# provided by moOde itself. NO cava here -- moOde's spectrum comes from peppyalsa
+# (an ALSA plugin every audio_output already routes through by default, writing
+# to /tmp/peppyspectrum), which Sable reads directly (fifo_meter.PeppySpectrumBars).
+#
+# python3-rpi.gpio is DELIBERATELY ABSENT. It is not merely unnecessary on moOde,
+# it is UNINSTALLABLE: moode-player depends on boss2-oled-p3, which depends on
+# python3-rpi-lgpio, which declares "Conflicts: python3-rpi.gpio". Verified on a
+# real moOde 10 (Debian 13) box -- apt refuses with "Reached two conflicting
+# decisions". That matters far beyond the one package, because apt aborts the
+# WHOLE transaction on an unsatisfiable member: with python3-rpi.gpio in this
+# list, lirc / i2c-tools / python3-pil / python3-spidev ALL silently failed to
+# install too, and the only visible symptom was a single WARN line. (This is the
+# same trap that previously swallowed cava.) RPi.GPIO itself still arrives via
+# the pip step below, which pulls it in as a luma.core dependency and compiles it
+# from source, independent of apt.
+#
+# Each package is installed on its own so ONE unavailable package can never again
+# take the rest down with it -- the batch form is a single point of failure.
+for _pkg in python3-dev python3-pip build-essential \
+            zlib1g-dev libjpeg-dev libfreetype6-dev \
+            python3-pil python3-spidev python3-cbor2 python3-smbus \
+            lirc i2c-tools; do
+    $SUDO apt-get install $APT_OPTS --no-install-recommends "$_pkg" >/dev/null 2>&1 \
+        || warn "apt could not install '$_pkg' (continuing -- see 'apt-get install $_pkg' for why)"
+done
 
 # 3. Python deps (system pip, pure-Python only; C-ext deps came from apt) -----
 log "installing python deps (pip, pure-Python) ..."
@@ -152,6 +166,16 @@ for u in quoode.service cava.service quoode-buttonsleds.service ir_listener.serv
         $SUDO mv "/etc/systemd/system/$u" "$DISABLED_DIR/$u"
     fi
 done
+
+# 5b. Make the clone writable BY the user the unit runs as ------------------
+# sable.service runs as $SABLE_USER, and Settings.save() does an atomic write
+# (mkstemp + rename) INSIDE config/ -- so a clone owned by anyone else makes the
+# app die on startup with "PermissionError: .../config/tmpXXXX.tmp" and then
+# crash-loop forever on Restart=always. Seen for real on a box cloned as root
+# (git clone under sudo does exactly this), where the ONLY symptom was a restart
+# counter climbing past 100. Cheap to assert every run, so assert it.
+log "ensuring $SABLE_DIR is owned by $SABLE_USER ..."
+$SUDO chown -R "$SABLE_USER" "$SABLE_DIR" || warn "could not chown $SABLE_DIR -- Sable may fail to save settings"
 
 # 6. Install + enable Sable's boot service (NOT started -- starts on reboot) --
 # Substitute the detected user/dir into the template -- systemd units can't

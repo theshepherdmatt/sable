@@ -1100,7 +1100,7 @@ def run_hardware(stage="clock", rotate=None, contrast=None,
             listener.on_browse = app.fsm.screens["browse"].on_browse_data
             listener.on_sources = app.fsm.screens["home"].refresh_sources
             listener.start()
-            log("Volumio listener started.")
+            log("%s listener started." % _platform())
 
         # --- boot gate: hold the splash until the unit is genuinely READY ------
         # Ready means BOTH: the clock is right, and Volumio is up. Either one
