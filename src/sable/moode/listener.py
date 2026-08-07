@@ -33,6 +33,10 @@ def _guess_service(path):
     return ""
 
 
+# moOde's own name for the library folder its radio stations live in.
+_RADIO_DIR = "RADIO"
+
+
 def _albumart_url(path, song):
     """Where moOde's own web server (port 80) serves the art for this track.
 
@@ -138,7 +142,14 @@ class MoodeListener:
         self.on_browse = None
         self.on_sources = None
         self.on_connect = None  # set by the app: fires once per successful connect
-        self.browse_sources = [{"name": "Music Library", "uri": "/", "plugin_type": "mpd"}]
+        # moOde keeps its ~230 radio stations as .pls files in the library's
+        # RADIO folder, so they were only reachable by drilling Music Library ->
+        # RADIO. Advertise the folder as a source in its own right; the on-device
+        # menu picks the same entry up via radio_source (VolumioListener has no
+        # such attribute -- Volumio's browse root already offers Radio).
+        self.radio_source = {"name": "Radio", "uri": _RADIO_DIR, "plugin_type": "mpd"}
+        self.browse_sources = [{"name": "Music Library", "uri": "/", "plugin_type": "mpd"},
+                               dict(self.radio_source)]
 
     # --- lifecycle ---
     def start(self):
@@ -269,8 +280,14 @@ class MoodeListener:
                              "title": e.get("title") or e["file"].rsplit("/", 1)[-1],
                              "service": _guess_service(e["file"])})
             elif "playlist" in e:
+                # Strip the .pls extension: every one of moOde's ~230 stations is
+                # a playlist file, and "BBC Radio 6 Music.pls" is not a station
+                # name anyone wants to read off a 256px panel.
+                leaf = e["playlist"].rsplit("/", 1)[-1]
+                if leaf.lower().endswith(".pls"):
+                    leaf = leaf[:-4]
                 items.append({"uri": e["playlist"], "type": "playlist",
-                             "title": e["playlist"].rsplit("/", 1)[-1], "service": "mpd"})
+                             "title": leaf, "service": "mpd"})
         # Hand BrowseScreen the shape it actually parses. It runs every response
         # through _items_from_response(), which reads navigation.lists[].items[]
         # -- a bare list has no "navigation" key, so it flattened to nothing and
@@ -300,9 +317,20 @@ class MoodeListener:
         uri = (item or {}).get("uri")
         if not uri:
             return
+        # A playlist file needs `load`, NOT `add`. MPD rejects add() on a .pls
+        # outright ("No such directory"), which is every one of moOde's radio
+        # stations -- so selecting a station did nothing at all. load() expands
+        # it and queues the stream URL inside. Verified against mpd on moOde 10:
+        # add("RADIO/x.pls") fails, load("RADIO/x.pls") queues the stream.
+        is_playlist = ((item or {}).get("type") == "playlist"
+                       or uri.lower().endswith((".pls", ".m3u", ".m3u8")))
+
         def _go(c):
             c.clear()
-            c.add(uri)
+            if is_playlist:
+                c.load(uri)
+            else:
+                c.add(uri)
             c.play(0)
         self._run_cmd("play_item", _go)
 
