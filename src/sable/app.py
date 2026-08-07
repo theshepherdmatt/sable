@@ -93,10 +93,16 @@ class App:
         self.settings = settings
         self.fonts = Fonts()
         self.store = StateStore(log=log)
-        self.albumart = AlbumArtCache(size=(ModernScreen.ART, ModernScreen.ART), log=log)
+        # Art is served by the PLAYER's own web server, and the two disagree on
+        # the port: Volumio's is :3000 (AlbumArtCache's default), moOde's is
+        # plain :80. Pointing at :3000 on moOde meant every fetch was refused
+        # outright, so nothing could show art there even once the URL was right.
+        art_host = "http://localhost" if _platform() == "moode" else "http://localhost:3000"
+        self.albumart = AlbumArtCache(host=art_host,
+                                      size=(ModernScreen.ART, ModernScreen.ART), log=log)
         # Wide, cover-cropped art for the full-bleed Cinema theme.
         self.albumart_cinema = AlbumArtCache(
-            size=(display.width, display.height), mode="cover", log=log)
+            host=art_host, size=(display.width, display.height), mode="cover", log=log)
         self.icons = IconCache(log=log)
         self.dry_run = dry_run
         self.log = log
@@ -706,6 +712,18 @@ class App:
         return (self.store.get().service or "").strip().lower() in _SOURCE_CONTROLLED
 
     def _transport(self, cmd):
+        # moOde has no `volumio` CLI -- shelling out there failed on EVERY
+        # transport press with "[Errno 2] No such file or directory: 'volumio'",
+        # so the buttons/IR/rotary silently did nothing. Its listener sends the
+        # command down the MPD connection it already holds instead. Volumio keeps
+        # the CLI path below unchanged.
+        if _platform() == "moode":
+            if self.dry_run:
+                self.log("[dry-run] moode transport", cmd)
+                return
+            if self.listener is not None:
+                self.listener.transport(cmd)
+            return
         # Fire-and-forget: the `volumio` CLI can block for many seconds (seen at
         # ~17s during AirPlay), and this runs on the INPUT thread (button/IR/
         # rotary) -- a synchronous call would freeze all input. Popen returns at
@@ -1119,8 +1137,14 @@ def run_hardware(stage="clock", rotate=None, contrast=None,
             gate_s = 120.0
 
         def _volumio_ready():
+            """Is the PLAYER up? (Named for Volumio, asked on both platforms.)"""
             if listener is None:
                 return True          # stages with no listener: nothing to wait for
+            if _platform() == "moode":
+                # MoodeListener has no `.sio` -- reading it here returned False
+                # forever, so the gate below never passed and every moOde boot ate
+                # the whole timeout on the splash before showing anything.
+                return bool(getattr(listener, "connected", False))
             return bool(getattr(getattr(listener, "sio", None), "connected", False))
 
         def _splash(msg):

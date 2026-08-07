@@ -17,6 +17,7 @@ Carry-forward from Quoode's moode_listener.py (proven on this exact platform):
 """
 import threading
 import time
+import urllib.parse
 
 from mpd import MPDClient, ConnectionError as MPDConnectionError
 
@@ -30,6 +31,32 @@ def _guess_service(path):
     if p:
         return "mpd"
     return ""
+
+
+def _albumart_url(path, song):
+    """Where moOde's own web server (port 80) serves the art for this track.
+
+    MPD itself reports no artwork, so without this the pushState carried no
+    'albumart' key at all and moOde ALWAYS fell back to the vinyl placeholder.
+    Volumio hands Sable a ready-made path instead; this is that path's moOde
+    equivalent, and stays a host-relative "/..." so AlbumArtCache.resolve_url
+    prefixes the configured host exactly as it does for Volumio.
+
+    Two different sources, because they genuinely are two different things:
+      - local files -> /coverart.php/<path>, which returns an embedded/folder
+        cover already scaled down (~19KB vs ~263KB for the ?path= form).
+      - webradio    -> the station-logo library, keyed on the station name.
+        coverart.php does answer for a stream URL, but only with moOde's
+        generic default cover, which is worse than Sable's own placeholder.
+    """
+    if not path:
+        return ""
+    if "://" in path:
+        name = (song.get("name") or "").strip()
+        if not name:
+            return ""
+        return "/imagesw/radio-logos/thumbs/%s_sm.jpg" % urllib.parse.quote(name, safe="")
+    return "/coverart.php/%s" % urllib.parse.quote(path, safe="/")
 
 
 def _mpd_state_to_pushstate(status, song, prev_volume=0):
@@ -64,6 +91,7 @@ def _mpd_state_to_pushstate(status, song, prev_volume=0):
         "album": song.get("album", ""),
         "service": _guess_service(path),
         "uri": path,
+        "albumart": _albumart_url(path, song),
         "volume": max(0, volume),
         "mute": mute,
         "samplerate": samplerate,
@@ -82,9 +110,28 @@ class MoodeListener:
         self.log = log
         self._running = False
         self._thread = None
+        # Whether the MPD connection is live RIGHT NOW. The boot gate polls this
+        # to decide the player is up; VolumioListener answers the same question
+        # with `.sio.connected`, which this class has no equivalent of -- so
+        # without this flag the gate saw False forever and burned its full
+        # timeout (~120s of splash) on every single moOde boot.
+        self.connected = False
         self._client = MPDClient()
         self._client.timeout = 10
         self._lock = threading.Lock()
+        # A SECOND, command-only MPD connection.
+        #
+        # _run() spends nearly all its time parked in `self._client.idle()`,
+        # which blocks until MPD reports a change -- and it holds self._lock for
+        # the whole wait. Any command sharing that lock therefore blocks on the
+        # INPUT thread until unrelated activity happens to wake idle(): opening
+        # the music library froze the whole UI until something else changed the
+        # player. MPD is happy to serve several connections, so commands get
+        # their own and never contend with idle() at all.
+        self._cmd = MPDClient()
+        self._cmd.timeout = 10
+        self._cmd_lock = threading.Lock()
+        self._cmd_connected = False
         # Browse callbacks -- same contract as VolumioListener (BrowseScreen /
         # HomeScreen read these); moOde has no async push, so browse()/
         # get_sources() call back synchronously right after fetching.
@@ -102,9 +149,16 @@ class MoodeListener:
 
     def stop(self):
         self._running = False
+        self.connected = False
         with self._lock:
             try:
                 self._client.disconnect()
+            except Exception:
+                pass
+        with self._cmd_lock:
+            self._cmd_connected = False
+            try:
+                self._cmd.disconnect()
             except Exception:
                 pass
 
@@ -115,6 +169,7 @@ class MoodeListener:
                 with self._lock:
                     self._client.connect(self.host, self.port)
                 self.log("moode: connected", "%s:%d" % (self.host, self.port))
+                self.connected = True
                 attempt = 0
                 if self.on_connect:
                     try:
@@ -134,6 +189,7 @@ class MoodeListener:
             except Exception as exc:
                 self.log("moode: idle loop error:", exc)
             finally:
+                self.connected = False
                 with self._lock:
                     try:
                         self._client.disconnect()
@@ -148,11 +204,40 @@ class MoodeListener:
             while self._running and time.monotonic() < end:
                 time.sleep(0.25)
 
+    def _run_cmd(self, what, fn, default=None):
+        """Run fn(client) on the command connection, connecting on first use and
+        reconnecting once if the socket went away (moOde restarts mpd on config
+        changes, so a stale connection is routine, not exceptional).
+
+        Never raises: an input-thread caller has nothing useful to do with the
+        exception, and letting one escape would kill the button/IR/rotary thread.
+        """
+        with self._cmd_lock:
+            for attempt in (1, 2):
+                try:
+                    if not self._cmd_connected:
+                        self._cmd.connect(self.host, self.port)
+                        self._cmd_connected = True
+                    return fn(self._cmd)
+                except (MPDConnectionError, ConnectionError, OSError) as exc:
+                    try:
+                        self._cmd.disconnect()
+                    except Exception:
+                        pass
+                    self._cmd_connected = False
+                    if attempt == 2:
+                        self.log("moode: %s error:" % what, exc)
+                except Exception as exc:
+                    self.log("moode: %s error:" % what, exc)
+                    return default
+        return default
+
     def _push_state(self):
-        with self._lock:
-            status = self._client.status()
-            song = self._client.currentsong()
-        d = _mpd_state_to_pushstate(status, song, prev_volume=self.store.get().volume)
+        status = self._run_cmd("status", lambda c: c.status())
+        song = self._run_cmd("currentsong", lambda c: c.currentsong())
+        if status is None:
+            return
+        d = _mpd_state_to_pushstate(status, song or {}, prev_volume=self.store.get().volume)
         new = self.store.apply_pushstate(d)
         self.log("  moode state -> status=%s vol=%s title=%r service=%s"
                  % (new.status, new.volume, new.title, new.service))
@@ -168,12 +253,7 @@ class MoodeListener:
         """Synchronous MPD `lsinfo` translated into Volumio-shaped browse items
         ({uri, service, type, title}) and delivered via on_browse, same as
         VolumioListener's async pushBrowseLibrary."""
-        try:
-            with self._lock:
-                entries = self._client.lsinfo(uri or "")
-        except Exception as exc:
-            self.log("moode: browse error:", exc)
-            entries = []
+        entries = self._run_cmd("browse", lambda c: c.lsinfo(uri or ""), default=[]) or []
         items = []
         for e in entries:
             if "directory" in e:
@@ -207,46 +287,77 @@ class MoodeListener:
         uri = (item or {}).get("uri")
         if not uri:
             return
-        try:
-            with self._lock:
-                self._client.clear()
-                self._client.add(uri)
-                self._client.play(0)
-        except Exception as exc:
-            self.log("moode: play_item error:", exc)
+        def _go(c):
+            c.clear()
+            c.add(uri)
+            c.play(0)
+        self._run_cmd("play_item", _go)
 
     def play_all(self, items):
         items = [it for it in (items or []) if it.get("uri")]
         if not items:
             return
-        try:
-            with self._lock:
-                self._client.clear()
-                for it in items:
-                    self._client.add(it["uri"])
-                self._client.play(0)
-        except Exception as exc:
-            self.log("moode: play_all error:", exc)
+        def _go(c):
+            c.clear()
+            for it in items:
+                c.add(it["uri"])
+            c.play(0)
+        self._run_cmd("play_all", _go)
 
     def set_volume(self, arg):
         """arg = '+' / '-' / 'mute' / 'unmute', or an int 0..100 -- same
         vocabulary as VolumioListener.set_volume."""
-        try:
-            with self._lock:
-                cur = int(self._client.status().get("volume", 0))
-                if arg == "+":
-                    self._client.setvol(min(100, cur + 5))
-                elif arg == "-":
-                    self._client.setvol(max(0, cur - 5))
-                elif arg == "mute":
-                    self._last_volume = cur
-                    self._client.setvol(0)
-                elif arg == "unmute":
-                    self._client.setvol(getattr(self, "_last_volume", 50) or 50)
+        def _go(c):
+            cur = int(c.status().get("volume", 0))
+            if arg == "+":
+                c.setvol(min(100, cur + 5))
+            elif arg == "-":
+                c.setvol(max(0, cur - 5))
+            elif arg == "mute":
+                self._last_volume = cur
+                c.setvol(0)
+            elif arg == "unmute":
+                c.setvol(getattr(self, "_last_volume", 50) or 50)
+            else:
+                c.setvol(max(0, min(100, int(arg))))
+        self._run_cmd("set_volume", _go)
+
+    def transport(self, cmd):
+        """play / pause / toggle / next / previous / random / repeat -- the same
+        vocabulary app.TRANSPORT hands to the `volumio` CLI on Volumio. moOde has
+        no such CLI (Sable used to shell out to `volumio` on every platform and
+        died with "[Errno 2] No such file or directory: 'volumio'"), so the
+        commands go down the MPD connection we already hold.
+
+        Called on the INPUT thread (button/IR/rotary), so it must not block for
+        long -- these are all single round-trips to a local socket, unlike the
+        `volumio` CLI which has been seen to take ~17s under AirPlay.
+        """
+        def _go(c):
+            if cmd == "play":
+                c.play()
+            elif cmd == "pause":
+                c.pause(1)
+            elif cmd == "toggle":
+                # Resolve it ourselves rather than using MPD's bare `pause`
+                # toggle: from "stop" that does nothing at all, which is
+                # exactly the state a button press is most likely to hit.
+                if c.status().get("state") == "play":
+                    c.pause(1)
                 else:
-                    self._client.setvol(max(0, min(100, int(arg))))
-        except Exception as exc:
-            self.log("moode: set_volume error:", exc)
+                    c.play()
+            elif cmd == "next":
+                c.next()
+            elif cmd == "previous":
+                c.previous()
+            elif cmd in ("random", "repeat"):
+                # Both are toggles in Sable's vocabulary; MPD wants an explicit
+                # 0/1, so read the current value and invert it.
+                cur = c.status().get(cmd)
+                getattr(c, cmd)(0 if str(cur) == "1" else 1)
+            else:
+                self.log("moode: unknown transport cmd:", cmd)
+        self._run_cmd("transport %s" % cmd, _go)
 
     def force_reconnect(self):
         self.log("moode: forcing self-disconnect (reconnect test)")
