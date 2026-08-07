@@ -25,12 +25,21 @@ import time
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
-from sable.moode import listener as listener_mod
+try:
+    from sable.moode import listener as listener_mod
+except ImportError as exc:                      # pragma: no cover
+    # python-mpd2 is a moOde-only dependency (requirements-moode.txt), so this
+    # file cannot even import on a Volumio box. Skip rather than fail: a red
+    # suite there would be blamed on whatever the developer just changed.
+    print("SKIP tests/test_radio.py -- moOde deps unavailable (%s)" % exc)
+    sys.exit(0)
+
+MoodeListener = listener_mod.MoodeListener
 
 from sable import hardware
 from sable.app import App
 from sable.display.sim import SimDisplay
-from sable.moode.listener import MoodeListener
+
 from sable.screens.browse import _items_from_response
 from sable.settings import Settings
 
