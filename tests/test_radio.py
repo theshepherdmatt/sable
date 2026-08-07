@@ -18,10 +18,14 @@ one, and its listener has no radio_source, so the row must stay absent.
 Headless -- no MPD, no network, no hardware. Run: python3 tests/test_radio.py
 """
 import os
+import shutil
 import sys
 import tempfile
+import time
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
+
+from sable.moode import listener as listener_mod
 
 from sable import hardware
 from sable.app import App
@@ -164,6 +168,60 @@ def test_nested_folder_named_radio_is_kept():
     L.browse("NAS")
     items, _prev = _items_from_response(got[0])
     assert [i["title"] for i in items] == ["RADIO"]
+
+
+def _with_stations(mapping, logos=()):
+    """Point the station lookup at a fake db map and a temp logo directory."""
+    listener_mod._stations = dict(mapping)
+    listener_mod._stations_t = time.monotonic()      # suppress the db reload
+    d = os.path.join(tempfile.gettempdir(), "sable_radio_logos")
+    shutil.rmtree(d, ignore_errors=True)
+    os.makedirs(os.path.join(d, "thumbs"), exist_ok=True)
+    for rel in logos:
+        path = os.path.join(d, rel)
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        open(path, "wb").close()
+    listener_mod._RADIO_LOGO_DIR = d
+    return d
+
+
+def test_station_art_resolves_by_url_not_tags():
+    # MPD reports NO 'name' for a stream and 'title' is overwritten by ICY
+    # metadata mid-stream, so the URL is the only stable key.
+    _with_stations({"http://s/x": "ABC Country"}, ["thumbs/ABC Country_sm.jpg"])
+    art = listener_mod._albumart_url("http://s/x", {"title": "Some Artist - A Song"})
+    assert art == "/imagesw/radio-logos/thumbs/ABC%20Country_sm.jpg"
+
+
+def test_station_art_prefers_the_small_thumbnail():
+    _with_stations({"http://s/x": "ABC Country"},
+                   ["thumbs/ABC Country_sm.jpg", "ABC Country.jpg"])
+    assert "_sm.jpg" in listener_mod._albumart_url("http://s/x", {})
+
+
+def test_station_art_falls_back_to_full_size_logo():
+    _with_stations({"http://s/x": "ABC Country"}, ["ABC Country.jpg"])
+    assert listener_mod._albumart_url("http://s/x", {}) == \
+        "/imagesw/radio-logos/ABC%20Country.jpg"
+
+
+def test_station_with_no_logo_gets_no_art():
+    # Better an empty string (Sable draws its own placeholder) than a URL that
+    # 404s on every fetch.
+    _with_stations({"http://s/x": "Obscure FM"}, [])
+    assert listener_mod._albumart_url("http://s/x", {}) == ""
+
+
+def test_unknown_station_falls_back_to_tags():
+    _with_stations({}, ["thumbs/Tagged Station_sm.jpg"])
+    art = listener_mod._albumart_url("http://s/unknown", {"name": "Tagged Station"})
+    assert art == "/imagesw/radio-logos/thumbs/Tagged%20Station_sm.jpg"
+
+
+def test_local_files_still_use_coverart_php():
+    _with_stations({}, [])
+    assert listener_mod._albumart_url("NAS/a/01. Track.flac", {}) == \
+        "/coverart.php/NAS/a/01.%20Track.flac"
 
 
 def main():

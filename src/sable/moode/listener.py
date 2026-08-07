@@ -15,6 +15,8 @@ Carry-forward from Quoode's moode_listener.py (proven on this exact platform):
   - service/source guessed from the file path (http -> webradio, else mpd) --
     moOde has no Volumio-style service metadata to read.
 """
+import os
+import sqlite3
 import threading
 import time
 import urllib.parse
@@ -36,6 +38,66 @@ def _guess_service(path):
 # moOde's own name for the library folder its radio stations live in.
 _RADIO_DIR = "RADIO"
 
+# moOde's station logo library, and the database that maps a stream URL to the
+# station it belongs to. Both are moOde's, read-only, on the same box.
+_MOODE_DB = os.environ.get("SABLE_MOODE_DB", "/var/local/www/db/moode-sqlite3.db")
+_RADIO_LOGO_DIR = os.environ.get("SABLE_RADIO_LOGO_DIR",
+                                 "/var/local/www/imagesw/radio-logos")
+_RADIO_LOGO_URL = "/imagesw/radio-logos"
+
+_stations = {}            # stream url -> station name
+_stations_t = 0.0
+_stations_lock = threading.Lock()
+
+
+def _station_name_for(url):
+    """Station name for a stream URL, from moOde's cfg_radio table.
+
+    Why the database and not the tags: MPD reports NO `name` field for these
+    (verified -- currentsong is just file/title/pos/id), and `title` only holds
+    the station name until the stream's ICY metadata arrives and overwrites it
+    with the current track. The URL never changes, so it is the one stable key.
+    Opened read-only; a missing or unreadable database just means no logo.
+    """
+    global _stations, _stations_t
+    if not url:
+        return ""
+    with _stations_lock:
+        now = time.monotonic()
+        # Reload on a miss (stations can be added in moOde), but at most once a
+        # minute so an unknown URL cannot hammer the database every frame.
+        if url not in _stations and (now - _stations_t) > 60.0:
+            _stations_t = now
+            try:
+                con = sqlite3.connect("file:%s?mode=ro" % _MOODE_DB, uri=True)
+                try:
+                    _stations = {r[0]: r[1] for r in
+                                 con.execute("select station, name from cfg_radio")}
+                finally:
+                    con.close()
+            except Exception:
+                pass
+        return _stations.get(url, "")
+
+
+def _radio_logo_url(name):
+    """Host-relative URL of moOde's logo for a station, or "" if it has none.
+
+    Prefers the _sm thumbnail (~3KB vs ~56KB) -- the panel draws it at 56px, so
+    the full-size one is pure download. Checked on disk rather than just built,
+    so a station with no logo falls back to Sable's own placeholder instead of
+    showing a broken fetch.
+    """
+    if not name:
+        return ""
+    for rel in ("thumbs/%s_sm.jpg" % name, "%s.jpg" % name):
+        try:
+            if os.path.isfile(os.path.join(_RADIO_LOGO_DIR, rel)):
+                return "%s/%s" % (_RADIO_LOGO_URL, urllib.parse.quote(rel, safe="/"))
+        except OSError:
+            pass
+    return ""
+
 
 def _albumart_url(path, song):
     """Where moOde's own web server (port 80) serves the art for this track.
@@ -56,10 +118,12 @@ def _albumart_url(path, song):
     if not path:
         return ""
     if "://" in path:
-        name = (song.get("name") or "").strip()
-        if not name:
-            return ""
-        return "/imagesw/radio-logos/thumbs/%s_sm.jpg" % urllib.parse.quote(name, safe="")
+        # Resolve the station by URL first; fall back to the tags, which hold the
+        # station name only until ICY metadata replaces them mid-stream.
+        name = (_station_name_for(path)
+                or (song.get("name") or "").strip()
+                or (song.get("title") or "").strip())
+        return _radio_logo_url(name)
     return "/coverart.php/%s" % urllib.parse.quote(path, safe="/")
 
 
