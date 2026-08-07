@@ -150,11 +150,18 @@ else
     warn "LIRC not installed -- skipping IR setup (buttons/rotary still work)"
 fi
 
-# 4c. Spectrum: NOTHING to configure here -- moOde's own peppyalsa ALSA plugin
-# already taps every audio_output's PCM unconditionally (verified: a stock
-# moOde 9 box routes pcm._audioout -> "peppy" by default) and writes bars to
-# /tmp/peppyspectrum, which Sable reads directly (fifo_meter.PeppySpectrumBars).
-# No MPD fifo output, no cava, nothing to restart.
+# 4c. Spectrum: nothing to INSTALL here -- moOde's own peppyalsa ALSA plugin
+# writes bars to /tmp/peppyspectrum, which Sable reads directly
+# (fifo_meter.PeppySpectrumBars). No MPD fifo output, no cava, nothing to spawn.
+#
+# But it is NOT on by default, and this script cannot turn it on: moOde ships the
+# plugin config as peppy.conf.HIDE and its own worker renames it to peppy.conf
+# only when the user enables peppyalsa in moOde's UI. Poking moOde's database
+# from here would just be overwritten by that worker. Until it is enabled the
+# pipe exists but nothing writes to it, and the visualisers sit flat -- so say so
+# rather than let it look like a Sable bug. (Quoode tells its users the same.)
+log "NOTE: for the spectrum/VU visualisers, enable peppyalsa in moOde's own UI"
+log "      (it is OFF by default -- until then /tmp/peppyspectrum is never written)"
 
 # 5. Retire conflicting Quoode units IF present (kept, just moved aside) -----
 mkdir -p "$DISABLED_DIR"

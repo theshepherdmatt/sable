@@ -15,15 +15,52 @@ import time
 CAVA_FIFO = os.environ.get("SABLE_CAVA_FIFO", "/tmp/sable-cava.fifo")
 DISPLAY_FIFO = os.environ.get("SABLE_DISPLAY_FIFO", "/tmp/sable-display.fifo")
 
-# moOde ships peppyalsa (an ALSA plugin, not an MPD fifo+cava like Volumio/quadify)
-# -- every audio_output on a stock moOde box already routes through it (see
-# /etc/alsa/conf.d/_audioout.conf: pcm._audioout -> slave.pcm "peppy"), so it is
-# ALWAYS live once anything plays; Sable never has to spawn anything for it,
-# unlike cava. Verified against /opt/peppyspectrum/spectrum.py (moOde's own
+# moOde ships peppyalsa (an ALSA plugin, not an MPD fifo+cava like Volumio/quadify).
+# Sable never has to spawn anything for it, unlike cava -- but it is NOT on by
+# default: moOde ships the config as peppy.conf.HIDE and its worker renames it to
+# peppy.conf only once the user enables peppyalsa in moOde's own UI (verified on
+# moOde 10; Quoode's installer tells its users the same thing). Until then this
+# pipe exists but nothing ever writes to it. Once enabled, _audioout routes
+# through it (pcm._audioout -> slave.pcm "peppy") and it is live whenever
+# anything plays. Verified against /opt/peppyspectrum/spectrum.py (moOde's own
 # reader): named pipe, PIPE_SIZE = 4 * bars bytes, each bar a little-endian
 # uint32, values 0..spectrum_max (100 in moOde's default peppy.conf).
 PEPPY_SPECTRUM_FIFO = os.environ.get("SABLE_PEPPY_FIFO", "/tmp/peppyspectrum")
 PEPPY_SPECTRUM_MAX = 100
+# peppyalsa's own config, which is what actually decides the wire format.
+PEPPY_CONF = os.environ.get("SABLE_PEPPY_CONF", "/etc/alsa/conf.d/peppy.conf")
+# Bars per frame that peppyalsa WRITES. This is NOT the number of bars Sable
+# draws: moOde ships spectrum_size 30 while the screens ask for 24, and treating
+# the display's count as the frame size mis-slices a 120-byte frame into 96-byte
+# windows that then drift across frame boundaries -- the bars stay plausible
+# (they are all mid-range) but no longer correspond to their frequencies, which
+# reads as a flat, dead wall. Measured on moOde 10: frames arrive as 120/240/360
+# bytes, i.e. multiples of 30 * 4.
+PEPPY_SPECTRUM_BARS = 30
+
+
+def _peppy_conf_int(key, default):
+    """Read an integer from peppyalsa's pcm_scope block, e.g. `spectrum_size 30`.
+
+    Prefer the writer's OWN config over a constant here: these are moOde's to
+    change (its peppy-config page edits them), and a mismatch is silent -- the
+    pipe carries no framing or header to notice it with.
+    """
+    env = os.environ.get("SABLE_PEPPY_" + key.upper())
+    if env:
+        try:
+            return int(env)
+        except ValueError:
+            pass
+    try:
+        with open(PEPPY_CONF, "r", encoding="utf-8", errors="replace") as fh:
+            for line in fh:
+                parts = line.strip().split()
+                if len(parts) >= 2 and parts[0] == key:
+                    return int(parts[1])
+    except (OSError, ValueError):
+        pass
+    return default
 
 
 class FifoBars:
@@ -152,11 +189,36 @@ class PeppySpectrumBars:
     open/reopen-on-stale idiom as FifoBars since peppyalsa's writer can restart
     independently of Sable (e.g. moOde audio engine restart)."""
 
-    def __init__(self, path=PEPPY_SPECTRUM_FIFO, bars=24, log=print, stale_s=2.0):
+    def __init__(self, path=PEPPY_SPECTRUM_FIFO, bars=24, log=print, stale_s=2.0,
+                 src_bars=None, vmax=None):
         self.path = path
-        self.bars = bars
+        self.bars = bars                  # bars Sable DRAWS
+        # Bars peppyalsa WRITES -- a different number, read from its own config.
+        self.src_bars = int(src_bars or _peppy_conf_int("spectrum_size",
+                                                        PEPPY_SPECTRUM_BARS))
+        self.vmax = int(vmax or _peppy_conf_int("spectrum_max",
+                                                PEPPY_SPECTRUM_MAX)) or 100
         self.log = log
         self.stale_s = stale_s
+        # Auto-gain, the thing cava does for Volumio and peppyalsa does NOT.
+        # peppyalsa reports against a fixed spectrum_max (100) that real music
+        # never approaches -- measured on moOde 10, a busy rock track peaks at
+        # ~58 and sits around 15 -- so every bar is squashed into the bottom
+        # half of the panel and the spectrum reads as a flat, mid-height wall.
+        # cava instead tracks the recent peak and normalises to it, which is why
+        # the same music looks alive on Volumio. Track a decaying running peak
+        # and divide by it. agc_floor caps the gain (~1/0.12 = 8x) so silence and
+        # quiet passages are not amplified into noise.
+        # Tracked at BOTH ends. Scaling by the peak alone is not enough: with
+        # logarithmic_amplitude on, peppyalsa keeps a whole frame inside roughly
+        # a 1.6:1 range (measured: bins 39..63), so dividing by the peak just
+        # moves the wall from mid-panel to the top -- every bar at 0.74..1.00.
+        # Stretching between a decaying floor and a decaying peak is what
+        # restores the separation between loud and quiet bins.
+        self.agc_decay = 0.995      # per frame; ~3s half-life at peppy's ~46fps
+        self.agc_min_span = 0.10    # never stretch a near-flat frame to full scale
+        self._agc_hi = self.agc_min_span
+        self._agc_lo = 0.0
         self._fd = None
         self._buf = b""
         self._last = [0.0] * bars
@@ -167,21 +229,76 @@ class PeppySpectrumBars:
             self._fd = os.open(self.path, os.O_RDONLY | os.O_NONBLOCK)
         except OSError:
             self._fd = None
+            return
+        # Drain whatever is already sitting in the pipe before reading for real.
+        #
+        # The frames carry NO delimiter or header, so alignment is positional and
+        # there is no way to recover it from content. peppyalsa's writes are one
+        # atomic 120-byte frame each, so a reader that starts on a write boundary
+        # stays aligned -- but a pipe left holding a PARTIAL frame (a previous
+        # reader stopped mid-frame) puts us permanently half a frame out, and the
+        # leftover-buffer logic in _consume() then preserves that offset forever.
+        # Every displayed frame straddles two real ones: values stay plausible,
+        # bars stop matching their frequencies, and the result looks glitchy and
+        # off the beat. Observed for real: reads of 12/16/84/108 bytes against a
+        # 120-byte frame. Discarding the backlog costs one frame (~20ms).
+        self._buf = b""
+        while True:
+            try:
+                if not os.read(self._fd, 65536):
+                    break
+            except (BlockingIOError, OSError):
+                break
 
     def _consume(self, data):
         self._buf += data
-        frame_bytes = 4 * self.bars
+        # Frame size follows the WRITER, not the display -- see PEPPY_SPECTRUM_BARS.
+        frame_bytes = 4 * self.src_bars
         if len(self._buf) < frame_bytes:
             return
-        # Keep only the latest complete frame.
+        # Keep only the LATEST complete frame -- the instantaneous spectrum.
+        #
+        # peppyalsa writes ~46fps against Sable's 20fps render, so most frames are
+        # discarded, and it is tempting to peak-hold across the burst instead so
+        # no transient is missed. Don't: max-ing 2-3 consecutive frames pulls
+        # every bin up towards the local maximum, which SHRINKS the difference
+        # between bins and makes the wall flatter -- the exact complaint. Quoode,
+        # which is known good on moOde, also takes the latest frame and leaves
+        # the ballistics to the smoother downstream.
         n_frames = len(self._buf) // frame_bytes
         frame = self._buf[(n_frames - 1) * frame_bytes: n_frames * frame_bytes]
         self._buf = self._buf[n_frames * frame_bytes:]
-        vals = []
-        for m in range(self.bars):
+        src = []
+        for m in range(self.src_bars):
             v = int.from_bytes(frame[4 * m:4 * m + 4], "little", signed=False)
-            vals.append(min(1.0, max(0.0, v / PEPPY_SPECTRUM_MAX)))
-        self._last = vals
+            src.append(min(1.0, max(0.0, v / self.vmax)))
+        # Auto-gain: chase each end fast in its own direction, release slowly, so
+        # the loudest bin reaches the top of the panel and the quietest reaches
+        # the bottom instead of every bar sitting in a band in between.
+        hi, lo = max(src), min(src)
+        self._agc_hi = max(hi, self._agc_hi - (self._agc_hi - hi) * (1 - self.agc_decay))
+        self._agc_lo = min(lo, self._agc_lo + (lo - self._agc_lo) * (1 - self.agc_decay))
+        span = max(self._agc_hi - self._agc_lo, self.agc_min_span)
+        src = [min(1.0, max(0.0, (v - self._agc_lo) / span)) for v in src]
+        self._last = self._resample(src)
+
+    def _resample(self, src):
+        """Map the writer's bars onto the display's, by PEAK within each bucket.
+
+        Peak rather than mean: these are spectrum magnitudes, and averaging
+        neighbouring bins is exactly what makes a busy spectrum look flat --
+        the loud bin gets diluted by its quiet neighbour. Peak keeps the
+        transient that makes the bar visibly move.
+        """
+        n_out, n_in = self.bars, len(src)
+        if n_out == n_in or not n_in:
+            return list(src)
+        out = []
+        for m in range(n_out):
+            lo = (m * n_in) // n_out
+            hi = max(lo + 1, ((m + 1) * n_in) // n_out)
+            out.append(max(src[lo:hi]))
+        return out
 
     def read(self):
         now = time.monotonic()

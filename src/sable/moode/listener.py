@@ -271,10 +271,19 @@ class MoodeListener:
         path = (uri or "").lstrip("/")
         entries = self._run_cmd("browse", lambda c: c.lsinfo(path), default=[]) or []
         items = []
+        # RADIO is a real library folder, so it shows up in the root listing --
+        # but it is already the carousel's own Radio source, and offering the
+        # same 233 stations twice just makes Music Library noisier. Hide it at
+        # the ROOT only; browsing into RADIO deliberately still works, which is
+        # exactly what the carousel entry does.
+        hide_at_root = {_RADIO_DIR.lower()} if not path else set()
         for e in entries:
             if "directory" in e:
+                leaf = e["directory"].rsplit("/", 1)[-1]
+                if leaf.lower() in hide_at_root:
+                    continue
                 items.append({"uri": e["directory"], "type": "folder",
-                             "title": e["directory"].rsplit("/", 1)[-1], "service": "mpd"})
+                             "title": leaf, "service": "mpd"})
             elif "file" in e:
                 items.append({"uri": e["file"], "type": "song",
                              "title": e.get("title") or e["file"].rsplit("/", 1)[-1],

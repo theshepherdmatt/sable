@@ -15,7 +15,7 @@ else in this README applies to both:
 | | Volumio 4 | moOde 9/10 |
 |---|---|---|
 | **Player data** | Socket.IO API (`volumio/listener.py`) | MPD directly, port 6600 (`moode/listener.py`) |
-| **Spectrum source** | **cava** reading MPD's `/tmp/cava.fifo` (installed by Sable) | moOde's own **peppyalsa** at `/tmp/peppyspectrum` (already there -- nothing to install) |
+| **Spectrum source** | **cava** reading MPD's `/tmp/cava.fifo` (installed by Sable) | moOde's own **peppyalsa** at `/tmp/peppyspectrum` -- nothing to install, but **you must switch it on in moOde's UI** (see below) |
 | **Settings UI** | the Volumio plugin's web page | edit `config/settings.json` (no web page yet) |
 
 ## What it does
@@ -146,7 +146,15 @@ fix this, but a `git pull` under sudo can reintroduce it. If you hit it:
 sudo chown -R $USER ~/sable && sudo systemctl restart sable.service
 ```
 
-Two moOde-specific notes worth knowing:
+**Turn peppyalsa on, or the visualisers stay flat.** This is the single most
+likely reason a working moOde install shows a dead spectrum. moOde ships the
+plugin config as `peppy.conf.hide` and only renames it to `peppy.conf` once
+**peppyalsa is enabled in moOde's own UI** -- until then `/tmp/peppyspectrum`
+exists but nothing ever writes to it, so the bars and VU needles sit still. The
+installer cannot do this for you: moOde's worker regenerates that file from its
+own database and would undo it.
+
+Three moOde-specific notes worth knowing:
 
 - **`python3-rpi.gpio` is uninstallable on moOde** and Sable does not ask for it.
   moOde's `boss2-oled-p3` pulls `python3-rpi-lgpio`, which declares
@@ -222,7 +230,7 @@ journalctl -u sable.service -f           # live log (every screen switch, errors
 | **Panel blank / garbled** | Wrong OLED pins for your board -- set them in `config/hardware.json` (defaults are `DC=24, RST=25, CS=CE0`). On cold boot Sable pulses the reset line; if still blank, `sudo systemctl restart sable.service`. Check nothing else holds SPI. |
 | **Plugin install fails at "Installing necessary utilities"** | `journalctl -u volumio --no-pager \| tail -50` -- it runs the plugin `install.sh` (as `sh`). On a *truly* fresh box the apt step can be slow; re-run if it timed out. |
 | **No spectrum / VU needles flat** (Volumio) | `which cava` (install with `apt install cava`). MPD must feed `/tmp/cava.fifo` -- the installer adds that output. **Radio via own-player, Spotify, AirPlay bypass MPD**, so they have no spectrum (by design). Test with a local track or standard web radio. |
-| **No spectrum / VU needles flat** (moOde) | Nothing to install -- check the pipe exists and is being written: `ls -l /tmp/peppyspectrum` (a `prw-` fifo). If it is missing, moOde's peppyalsa is not in the output chain; confirm moOde routes `pcm._audioout` through `peppy`. Sources that bypass ALSA still have no spectrum. |
+| **No spectrum / VU needles flat** (moOde) | **First: is peppyalsa enabled in moOde's UI?** It is OFF by default. `ls /etc/alsa/conf.d/peppy.conf` -- if you only have `peppy.conf.hide`, that is the answer, and nothing writes `/tmp/peppyspectrum` until you switch it on. Then check the chain reaches a real output: `_audioout` -> `peppy` -> ... -> `_peppyout`. If MPD reports `Failed to open ALSA device`, playback never happens, so neither does the spectrum. Sources that bypass ALSA have no spectrum by design. |
 | **Buttons / LEDs dead** | I2C enabled + MCP present? `i2cdetect -y 1` should show `20`. If the bus is missing, controls are disabled (logged). |
 | **IR remote does nothing** | `systemctl is-active lircd`; `irw` should print key names on a press. `/dev/lirc0` exists only after the gpio-ir overlay + reboot. Different remote -> replace `config/lirc/lircd.conf` and re-run the installer. Buttons/rotary are unaffected. |
 | **Album art missing on radio** | Some stations give no art (a vinyl-record placeholder shows). Real station logos load, even with spaces in the filename. |

@@ -23,21 +23,9 @@ class MenuScreen(Screen):
         self.root = self._build_tree()
         self.stack = [self._frame("MENU", self.root)]
 
-    def _radio_source(self):
-        """The player's radio folder, or None if it has no distinct one.
-
-        Only moOde advertises this: its stations are .pls files in a library
-        folder, invisible unless something points at them. Volumio's own browse
-        root already offers Radio, so its listener has no such attribute and the
-        row stays absent rather than duplicating what is already there.
-        """
-        return getattr(self.app.listener, "radio_source", None)
-
     def _build_tree(self):
-        radio = self._radio_source()
         return [
             ("Now Playing", self._now_playing),
-        ] + ([("Radio", self._open_radio)] if radio else []) + [
             ("Display Mode", [
                 ("Modern: Panel", lambda: self._set_modern("panel")),
                 ("Modern: Cinema", lambda: self._set_modern("cinema")),
@@ -95,11 +83,6 @@ class MenuScreen(Screen):
 
     # --- navigation ---
     def on_enter(self, **kwargs):
-        # Rebuild rather than reuse the tree cached at construction: the listener
-        # is attached to the app AFTER the screens are built, so a root captured
-        # in __init__ can never show a row that depends on it (the Radio entry).
-        # Building it is pure and cheap -- a handful of tuples per menu open.
-        self.root = self._build_tree()
         self.stack = [self._frame("MENU", self.root)]
         self.app.fsm.reset_menu_timer()
 
@@ -134,14 +117,6 @@ class MenuScreen(Screen):
 
     # --- actions ---
     def _open_browse(self):
-        self.app.go("browse")
-
-    def _open_radio(self):
-        src = self._radio_source() or {}
-        browse = self.app.fsm.screens.get("browse")
-        if browse is None:
-            return
-        browse.open_source(src.get("uri", ""), src.get("name") or "Radio")
         self.app.go("browse")
 
     def _now_playing(self):

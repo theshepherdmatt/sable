@@ -124,43 +124,46 @@ def test_radio_is_a_carousel_source():
     assert L.radio_source["uri"] == "RADIO"
 
 
-def test_menu_shows_radio_when_the_listener_offers_one():
-    L = MoodeListener(None, log=lambda *a: None)
-    m = _app(L).fsm.screens["menu"]
-    m.on_enter()
-    assert "Radio" in _labels(m)
-
-
-def test_menu_hides_radio_without_a_radio_source():
-    # Volumio's listener has no radio_source; its browse root already has Radio.
-    class _Volumio:
-        pass
-    m = _app(_Volumio()).fsm.screens["menu"]
+def test_radio_is_NOT_in_the_menu():
+    # The carousel is the ONE place Radio lives. It was briefly in the on-device
+    # menu too; offering the same folder from three surfaces is clutter.
+    m = _app(MoodeListener(None, log=lambda *a: None)).fsm.screens["menu"]
     m.on_enter()
     assert "Radio" not in _labels(m)
 
 
-def test_menu_row_appears_though_listener_attached_after_build():
-    # The screens are constructed before the listener exists, so a tree cached
-    # in __init__ could never show this row.
-    app = _app(None)
-    m = app.fsm.screens["menu"]
-    m.on_enter()
-    assert "Radio" not in _labels(m)
-    app.listener = MoodeListener(None, log=lambda *a: None)
-    m.on_enter()
-    assert "Radio" in _labels(m), "menu tree cached too early to see the listener"
+def test_radio_folder_hidden_from_the_library_root():
+    # Same reason: RADIO is a real library folder, but the carousel already
+    # offers it, so the root listing should not repeat it.
+    L, c = _listener([{"directory": "NAS"}, {"directory": "RADIO"},
+                      {"directory": "OSDISK"}])
+    got = []
+    L.on_browse = got.append
+    L.browse("")
+    items, _prev = _items_from_response(got[0])
+    assert [i["title"] for i in items] == ["NAS", "OSDISK"]
 
 
-def test_menu_radio_opens_browse_at_the_radio_folder():
-    app = _app(MoodeListener(None, log=lambda *a: None))
-    m = app.fsm.screens["menu"]
-    m.on_enter()
-    m._cur["index"] = _labels(m).index("Radio")
-    m.handle_select()
-    assert app.fsm.current.name == "browse"
-    assert app.fsm.screens["browse"]._open is None   # consumed by on_enter
-    assert app.fsm.screens["browse"]._cur["title"] == "Radio"
+def test_radio_folder_still_browsable_when_opened_directly():
+    # Hiding it at the root must NOT make it unreachable -- opening it is
+    # exactly what the carousel entry does.
+    L, c = _listener([{"playlist": "RADIO/ABC Country.pls"}])
+    got = []
+    L.on_browse = got.append
+    L.browse("RADIO")
+    items, _prev = _items_from_response(got[0])
+    assert [i["title"] for i in items] == ["ABC Country"]
+
+
+def test_nested_folder_named_radio_is_kept():
+    # The hide applies to the ROOT only, not to any folder that happens to be
+    # called RADIO further down someone's library.
+    L, c = _listener([{"directory": "NAS/RADIO"}])
+    got = []
+    L.on_browse = got.append
+    L.browse("NAS")
+    items, _prev = _items_from_response(got[0])
+    assert [i["title"] for i in items] == ["RADIO"]
 
 
 def main():
