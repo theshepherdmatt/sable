@@ -304,6 +304,29 @@ class App:
                                 "high": hardware.CONTRAST.high}.get(
                                     level, hardware.CONTRAST.medium))
 
+    def set_rotate_from_settings(self):
+        """Apply display.rotate to the live panel.
+
+        A no-op on backends that cannot rotate in place (SimDisplay), so the
+        menu entry is safe to exercise in the sim tests -- the setting is still
+        written and takes effect at the next real start. Re-inits the panel,
+        which costs one full repaint, so it is only called on an actual change.
+        """
+        deg = int(self.settings.get("display", "rotate", default=0) or 0)
+        setter = getattr(self.display, "set_rotate", None)
+        if setter is None:
+            return False
+        try:
+            changed = setter(deg)
+        except Exception as e:
+            self.log("rotate: could not apply live (takes effect on restart):", e)
+            return False
+        if changed:
+            self.log("rotate: panel now %ddeg" % deg)
+            # The re-init clears GRAM, so nothing is on screen until we redraw.
+            self.render()
+        return changed
+
     def _dim_contrast(self):
         return max(hardware.CONTRAST.low // 2, self._base_contrast // 3)
 
@@ -580,9 +603,13 @@ class App:
         elif cmd == "reload_config":
             self.settings.load()
             # Re-apply settings that are set imperatively (not read each frame):
-            # brightness -> contrast. screen/style/transitions/clock/screensaver
-            # are read live in render()/tick, so they apply on the next frame.
+            # brightness -> contrast, and rotation -> a panel re-init.
+            # screen/style/transitions/clock/screensaver are read live in
+            # render()/tick, so they apply on the next frame.
             self.set_brightness_from_settings()
+            # No-op unless display.rotate actually changed, so the ordinary
+            # reload stays a cheap ping and only a real rotation costs a re-init.
+            self.set_rotate_from_settings()
             self.log("config reloaded")
             self.render()
         elif cmd == "shutdown":

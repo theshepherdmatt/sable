@@ -128,6 +128,25 @@ class OledDisplay(Display):
         except Exception as e:
             log("oled: post-init clear failed (continuing):", e)
 
+    def set_rotate(self, degrees):
+        """Change panel rotation LIVE, in degrees (0 / 180).
+
+        luma bakes rotation into the device at construction, which is why the
+        Volumio plugin restarts the service to apply it. It does not have to:
+        reinit() already rebuilds the device on the EXISTING serial, so pointing
+        _luma_rotate at the new value first makes the rebuild come up rotated --
+        no restart, and the menu can show the result immediately.
+
+        Returns True if the panel was re-inited, False if the value was already
+        current (so callers can skip a pointless full repaint).
+        """
+        luma_rotate = (int(degrees) // 90) % 4
+        if luma_rotate == self._luma_rotate:
+            return False
+        self._luma_rotate = luma_rotate
+        self.reinit()
+        return True
+
     def reinit(self):
         """Redo the panel's whole power-on sequence: reset pulse, init burst,
         clear. Safe to call on a working panel (it just costs one full repaint).

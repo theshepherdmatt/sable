@@ -43,7 +43,20 @@ class MenuScreen(Screen):
                 ("Back", _BACK),
             ], lambda: self.app.settings.get(
                 "display", "brightness", default="medium").capitalize()),
+            ("Screen Rotation", [
+                ("Normal", lambda: self._set_rotate(0)),
+                ("Upside-down", lambda: self._set_rotate(180)),
+                ("Back", _BACK),
+            ], self._rotate_label),
         ]
+
+    def _rotate_label(self):
+        deg = self.app.settings.get("display", "rotate", default=0)
+        try:
+            deg = int(deg or 0)
+        except (TypeError, ValueError):
+            deg = 0
+        return "180deg" if deg == 180 else "Normal"
 
     def _display_mode_label(self):
         screen = self.app.settings.get("display", "screen", default="modern")
@@ -118,6 +131,14 @@ class MenuScreen(Screen):
         self.app.settings.set("display", "screen", "spectrum")
         self.app.settings.set("display", "spectrum_style", style)
         self.app.go(self.app.nowplaying_screen())
+
+    def _set_rotate(self, degrees):
+        # Applied live (the panel re-inits) so the user sees the result while
+        # still in the menu -- the point of rotating is that the panel is
+        # mounted upside-down, and making them restart to find out defeats it.
+        # The menu stays open, exactly like Brightness.
+        self.app.settings.set("display", "rotate", int(degrees))
+        self.app.set_rotate_from_settings()
 
     def _set_brightness(self, level):
         # Applied live so the user can compare; menu stays open. Routed through
