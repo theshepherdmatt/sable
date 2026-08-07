@@ -253,7 +253,12 @@ class MoodeListener:
         """Synchronous MPD `lsinfo` translated into Volumio-shaped browse items
         ({uri, service, type, title}) and delivered via on_browse, same as
         VolumioListener's async pushBrowseLibrary."""
-        entries = self._run_cmd("browse", lambda c: c.lsinfo(uri or ""), default=[]) or []
+        # MPD paths are relative and have no leading slash: lsinfo("/NAS")
+        # returns NOTHING while lsinfo("NAS") returns the folder. The home
+        # carousel's own root entry is "/", so normalise rather than trusting
+        # callers to know MPD's rule.
+        path = (uri or "").lstrip("/")
+        entries = self._run_cmd("browse", lambda c: c.lsinfo(path), default=[]) or []
         items = []
         for e in entries:
             if "directory" in e:
@@ -266,10 +271,18 @@ class MoodeListener:
             elif "playlist" in e:
                 items.append({"uri": e["playlist"], "type": "playlist",
                              "title": e["playlist"].rsplit("/", 1)[-1], "service": "mpd"})
+        # Hand BrowseScreen the shape it actually parses. It runs every response
+        # through _items_from_response(), which reads navigation.lists[].items[]
+        # -- a bare list has no "navigation" key, so it flattened to nothing and
+        # the music library opened EMPTY on moOde however many entries MPD
+        # returned. Wrapping here keeps the screens backend-agnostic, which is
+        # the whole point of the listener boundary (see DESIGN.md).
+        parent = path.rsplit("/", 1)[0] if "/" in path else ""
         cb = self.on_browse
         if cb:
             try:
-                cb(items)
+                cb({"navigation": {"lists": [{"items": items}],
+                                   "prev": {"uri": parent}}})
             except Exception as exc:
                 self.log("  on_browse error:", exc)
 
