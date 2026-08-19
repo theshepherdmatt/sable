@@ -20,7 +20,7 @@ var PROFILES_DIR = '/home/volumio/sable/config/lirc/profiles';
 var LIRCD_CONF = '/etc/lirc/lircd.conf';
 var DEFAULT_IR_PROFILE = 'Xiaomi IR for TV box';
 var USERCONFIG = '/boot/userconfig.txt';
-var DEFAULT_IR_GPIO_PIN = 4;
+var DEFAULT_IR_GPIO_PIN = 27;
 // Front-panel button fallbacks, used when the form posts an empty select and
 // when the settings page is opened before anything has been saved. Button 8 is
 // the power button -- defaulting it to 'none' here is what killed shutdown,

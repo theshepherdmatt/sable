@@ -66,7 +66,7 @@ else
 fi
 
 # 3. Kernel overlays (written now; take effect on the next REBOOT) -----------
-# SPI (OLED), I2C (buttons/LEDs), gpio-ir (IR BCM4). gpio-shutdown wires a safe
+# SPI (OLED), I2C (buttons/LEDs), gpio-ir (IR BCM27). gpio-shutdown wires a safe
 # power-off button on BCM17 -- remove that line if your board has nothing on BCM17
 # and powers off / won't stay up. Audio (USB/HAT/HDMI) is Volumio's concern -- no
 # audio overlay here.
@@ -80,7 +80,7 @@ add_overlay() {
 }
 add_overlay "dtparam=spi=on"
 add_overlay "dtparam=i2c_arm=on"
-add_overlay "dtoverlay=gpio-ir,gpio_pin=4"
+add_overlay "dtoverlay=gpio-ir,gpio_pin=27"
 add_overlay "dtoverlay=gpio-shutdown,gpio_pin=17,active_low=1,gpio_pull=up"
 
 # 3b. IR (LIRC): default remote profile + options + boot hook (only if lirc present).

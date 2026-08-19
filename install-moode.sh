@@ -120,7 +120,7 @@ add_overlay() {
 }
 add_overlay "dtparam=spi=on"
 add_overlay "dtparam=i2c_arm=on"
-add_overlay "dtoverlay=gpio-ir,gpio_pin=4"
+add_overlay "dtoverlay=gpio-ir,gpio_pin=27"
 add_overlay "dtoverlay=gpio-shutdown,gpio_pin=17,active_low=1,gpio_pull=up"
 
 # 4b. IR (LIRC): default remote profile + options + boot hook (only if lirc present).

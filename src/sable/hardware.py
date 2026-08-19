@@ -105,11 +105,11 @@ MCP = _build(Mcp23017, "mcp", _OVERRIDES)
 # /boot/userconfig.txt:
 #   dtparam=spi=on
 #   dtparam=i2c_arm=on
-#   dtoverlay=gpio-ir,gpio_pin=4
+#   dtoverlay=gpio-ir,gpio_pin=27
 #   dtoverlay=gpio-shutdown,gpio_pin=17,active_low=1,gpio_pull=up
 # Audio output (USB DAC / I2S HAT / HDMI) is Volumio's concern -- Sable adds no
 # audio overlay here.
-IR_GPIO = 4
+IR_GPIO = 27  # matches quadify.uk's published wiring diagram (physical pin 13)
 POWER_BUTTON_GPIO = 17           # handled by gpio-shutdown overlay, never in software
 
 # LED bit positions on GPIOA (one lit at a time).
